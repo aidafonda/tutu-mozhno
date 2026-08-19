@@ -1,0 +1,66 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildToolArguments, parseMcpResponse, rankSearchTools } from "../src/mcp-client.mjs";
+import { createDemoRoutes, validateSearchInput } from "../src/product.mjs";
+
+test("validates a complete trip", () => {
+  const result = validateSearchInput({ from: "Москва", to: "Казань", date: "2026-08-20", mode: "train" });
+  assert.equal(result.valid, true);
+  assert.equal(result.value.passengers, 1);
+});
+
+test("rejects an identical origin and destination", () => {
+  const result = validateSearchInput({ from: "Москва", to: "москва", date: "2026-08-20" });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.to);
+});
+
+test("builds arguments from a discovered MCP schema", () => {
+  const schema = { properties: { departure_city: { type: "string" }, arrival_city: { type: "string" }, departure_date: { type: "string" }, adults: { type: "integer" } } };
+  assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань", date: "2026-08-20", passengers: 2 }), {
+    departure_city: "Москва", arrival_city: "Казань", departure_date: "2026-08-20", adults: 2
+  });
+});
+
+test("prefers canonical MCP fields and adds lean search defaults", () => {
+  const schema = { properties: {
+    origin: { anyOf: [{ type: "string" }, { type: "null" }] },
+    from_city: { anyOf: [{ type: "string" }, { type: "null" }] },
+    destination: { anyOf: [{ type: "string" }, { type: "null" }] },
+    to_city: { anyOf: [{ type: "string" }, { type: "null" }] },
+    departure_date: { anyOf: [{ type: "string" }, { type: "null" }] },
+    page_size: { type: "integer" }, sort: { type: "string" }, view: { type: "string" }
+  } };
+  assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань", date: "2026-08-20" }), {
+    origin: "Москва", destination: "Казань", departure_date: "2026-08-20", page_size: 3, sort: "duration_asc", view: "compact"
+  });
+});
+
+test("ranks search before detail tools", () => {
+  const tools = [
+    { name: "train_details", description: "Get train detail" },
+    { name: "search_trains", description: "Search train offers", inputSchema: { properties: { from: {}, to: {} } } }
+  ];
+  assert.equal(rankSearchTools(tools, "train")[0].name, "search_trains");
+});
+
+test("does not mistake direct_only for destination", () => {
+  const schema = { properties: {
+    origin: { type: "string" }, destination: { type: "string" }, direct_only: { type: "boolean" }
+  } };
+  assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань" }), {
+    origin: "Москва", destination: "Казань"
+  });
+});
+
+test("parses an SSE MCP response", () => {
+  const response = parseMcpResponse('event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[]}}\n\n');
+  assert.deepEqual(response.result.tools, []);
+});
+
+test("labels demo evidence honestly", () => {
+  const [route] = createDemoRoutes({ from: "Москва", to: "Казань", date: "2026-08-20", mode: "train", stepFree: true, assistance: true });
+  assert.equal(route.source, "demo");
+  assert.equal(route.accessibility.status, "verify");
+  assert.match(route.evidence[0].note, /Демонстрационные/);
+});

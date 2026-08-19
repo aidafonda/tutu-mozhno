@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Туту.Можно проверяет, подходит ли вся поездка требованиям человека, и показывает слабое звено до покупки билета.">
+  <title>Туту.Можно — билет есть, а добраться получится?</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#search">Перейти к поиску</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Туту.Можно — на главную">
+      <span class="brand-mark" aria-hidden="true">т</span>
+      <span>Туту.<strong>Можно</strong></span>
+    </a>
+    <nav aria-label="Основная навигация">
+      <a href="#how">Как работает</a>
+      <a href="/docs">Документация</a>
+    </nav>
+    <div class="mcp-status" id="mcpStatus" role="status">
+      <span class="status-dot"></span><span>Проверяем MCP</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">Инклюзивный планировщик поездок</div>
+      <h1>Билет купить можно.<br><span>А добраться — точно?</span></h1>
+      <p class="hero-copy">Проверяем весь путь с учётом ваших требований и заранее показываем слабое звено: пересадку, лестницу или неподтверждённую помощь.</p>
+      <div class="principles" aria-label="Принципы сервиса">
+        <span>Без диагнозов</span><span>Без ложных гарантий</span><span>С источниками данных</span>
+      </div>
+    </section>
+
+    <section class="search-shell" id="search" aria-labelledby="search-title">
+      <div class="section-heading">
+        <div><span class="step">01</span><h2 id="search-title">Куда едем?</h2></div>
+        <p>Сначала маршрут, затем только необходимые условия.</p>
+      </div>
+
+      <form id="searchForm" novalidate>
+        <div class="trip-grid">
+          <label>Откуда
+            <input id="from" name="from" value="Москва" autocomplete="address-level2" required>
+            <span class="field-error" data-error-for="from"></span>
+          </label>
+          <button class="swap" id="swapCities" type="button" aria-label="Поменять города местами">⇄</button>
+          <label>Куда
+            <input id="to" name="to" value="Казань" autocomplete="address-level2" required>
+            <span class="field-error" data-error-for="to"></span>
+          </label>
+          <label>Когда
+            <input id="date" name="date" type="date" required>
+            <span class="field-error" data-error-for="date"></span>
+          </label>
+          <label>Транспорт
+            <select id="mode" name="mode">
+              <option value="train">Поезд</option>
+              <option value="plane">Самолёт</option>
+              <option value="bus">Автобус</option>
+              <option value="any">Любой</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset class="needs">
+          <legend><span class="step">02</span>Что важно именно вам?</legend>
+          <p>Мы спрашиваем про условия поездки, а не про состояние здоровья.</p>
+          <div class="need-grid">
+            <label class="choice"><input type="checkbox" name="stepFree" checked><span class="choice-icon">↗</span><span><strong>Без ступеней</strong><small>Лифт, пандус или ровный вход</small></span></label>
+            <label class="choice"><input type="checkbox" name="assistance" checked><span class="choice-icon">◆</span><span><strong>Нужно сопровождение</strong><small>Помощь на вокзале или в аэропорту</small></span></label>
+            <label class="choice"><input type="checkbox" name="accessibleToilet"><span class="choice-icon">●</span><span><strong>Доступный санузел</strong><small>На маршруте или в транспорте</small></span></label>
+            <label class="choice walk-choice"><span class="choice-icon">↔</span><span><strong>Не больше <output id="walkOutput">300 м</output> пешком</strong><input type="range" name="maxWalk" min="100" max="1000" step="100" value="300" aria-label="Максимальная дистанция пешком"></span></label>
+          </div>
+        </fieldset>
+
+        <div class="form-footer">
+          <p><span aria-hidden="true">ⓘ</span> Сервис не ставит диагнозов и не сохраняет профиль здоровья.</p>
+          <button class="primary-button" id="submitButton" type="submit"><span>Проверить поездку</span><span aria-hidden="true">→</span></button>
+        </div>
+      </form>
+    </section>
+
+    <section id="results" class="results" aria-live="polite" aria-busy="false" hidden>
+      <div id="resultContent"></div>
+    </section>
+
+    <section class="how" id="how">
+      <div class="section-heading"><div><span class="step">03</span><h2>Не рейтинг, а объяснение</h2></div><p>Маршрут подходит ровно настолько, насколько подходит его самый сложный участок.</p></div>
+      <div class="how-grid">
+        <article><span>1</span><h3>Ищем варианты</h3><p>Реальные предложения транспорта получаем через Туту MCP.</p></article>
+        <article><span>2</span><h3>Проверяем требования</h3><p>Отделяем подтверждённые факты от правил и неизвестных данных.</p></article>
+        <article><span>3</span><h3>Показываем действие</h3><p>Объясняем, что уточнить до оплаты и когда запросить помощь.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>Прототип для ИИ-хакатона Туту × MCP 2026</span><a href="/docs">Как пользоваться и как устроено</a></footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

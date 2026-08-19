@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Пользовательская документация прототипа Туту.Можно.">
+  <title>Документация — Туту.Можно</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .docs-layout{display:grid;grid-template-columns:240px minmax(0,760px);gap:70px;max-width:1100px;margin:64px auto 100px;padding:0 20px}.docs-nav{position:sticky;top:100px;align-self:start}.docs-nav strong{display:block;margin-bottom:12px;font-size:12px;text-transform:uppercase;letter-spacing:.12em}.docs-nav a{display:block;padding:8px 0;color:var(--muted);font-size:13px;text-decoration:none}.docs-nav a:hover{color:var(--orange)}.docs-content h1{font-size:clamp(44px,7vw,72px);text-align:left}.docs-content h2{margin:64px 0 16px;font-size:30px;letter-spacing:-.04em}.docs-content h3{margin-top:28px}.docs-content p,.docs-content li{color:#555c68}.docs-content li+li{margin-top:8px}.docs-content .lead{font-size:20px}.doc-callout{margin:24px 0;padding:20px;background:var(--green-soft);border-left:4px solid var(--green);border-radius:0 12px 12px 0}.doc-warning{background:var(--orange-soft);border-left-color:var(--orange)}.status-table{width:100%;border-collapse:collapse}.status-table th,.status-table td{padding:14px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}.status-table th{font-size:11px;text-transform:uppercase}.code{overflow:auto;padding:18px;color:#e7edf5;background:var(--ink);border-radius:14px;font:13px/1.6 Consolas,monospace}.example-card{padding:24px;background:#fff;border:1px solid var(--line);border-radius:16px}.example-card strong{color:var(--green)}@media(max-width:760px){.docs-layout{grid-template-columns:1fr;margin-top:40px}.docs-nav{display:none}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">Перейти к содержанию</a>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">т</span><span>Туту.<strong>Можно</strong></span></a>
+    <nav aria-label="Основная навигация"><a href="/">Найти маршрут</a><a href="#limitations">Ограничения</a></nav>
+  </header>
+  <main class="docs-layout">
+    <aside class="docs-nav"><strong>Содержание</strong><a href="#about">О продукте</a><a href="#start">Быстрый старт</a><a href="#statuses">Статусы</a><a href="#example">Пример</a><a href="#data">Источники данных</a><a href="#limitations">Ограничения</a><a href="#errors">Если что-то сломалось</a></aside>
+    <article class="docs-content" id="content">
+      <p class="eyebrow">Пользовательская документация · версия 0.1</p>
+      <h1>Как проверить, получится ли добраться</h1>
+      <p class="lead">Туту.Можно дополняет обычный поиск билетов проверкой ваших требований ко всей поездке. Сервис не ставит диагноз и не обещает то, чего не смог подтвердить.</p>
+
+      <section id="about"><h2>О продукте</h2><p>Обычный поиск отвечает на вопрос «есть ли билет?». Для человека с ограничениями мобильности этого мало: поезд может подходить, но пересадка, вход на вокзал или отсутствие сопровождения делают всю поездку невозможной.</p><div class="doc-callout"><strong>Принцип слабого звена:</strong> итоговый статус маршрута определяется самым критичным неподтверждённым участком, а не средней оценкой.</div></section>
+
+      <section id="start"><h2>Быстрый старт</h2><ol><li>Укажите города, дату и вид транспорта.</li><li>Выберите только условия, необходимые именно вам.</li><li>Нажмите «Проверить поездку».</li><li>Сначала прочитайте блок «Слабое звено», затем откройте объяснение.</li><li>Выполните действия из чек-листа до оплаты.</li></ol></section>
+
+      <section id="statuses"><h2>Что означают статусы</h2><table class="status-table"><thead><tr><th>Статус</th><th>Значение</th><th>Действие</th></tr></thead><tbody><tr><td><strong>Подходит</strong></td><td>Критических противоречий не найдено, необходимые факты подтверждены.</td><td>Проверить актуальность и перейти к оформлению.</td></tr><tr><td><strong>Нужно уточнить</strong></td><td>Маршрут может подойти, но не хватает критичной информации.</td><td>Выполнить предложенный чек-лист.</td></tr><tr><td><strong>Не подходит</strong></td><td>Найдено прямое противоречие выбранным требованиям.</td><td>Выбрать другой вариант.</td></tr></tbody></table><div class="doc-callout doc-warning">Числовой «процент доступности» намеренно не используется: он создаёт ложную точность и скрывает критические неизвестные.</div></section>
+
+      <section id="example"><h2>Пример</h2><div class="example-card"><p><strong>Ситуация:</strong> Анна едет одна из Москвы в Казань, пользуется креслом-коляской и просит сопровождение.</p><p><strong>Результат:</strong> вариант без пересадки находится выше, но получает статус «Нужно уточнить»: MCP подтвердил предложение транспорта, а безбарьерный вход и помощь при посадке ещё не подтверждены.</p><p><strong>Действие:</strong> запросить сопровождение и подтвердить доступность у перевозчика до оплаты.</p></div></section>
+
+      <section id="data"><h2>Откуда берутся данные</h2><ul><li><strong>Туту MCP:</strong> транспортные предложения, расписание, цена и ссылка на оформление, когда они присутствуют в ответе инструмента.</li><li><strong>Правила продукта:</strong> оценка пересадок и сопоставление с выбранными требованиями.</li><li><strong>Неизвестно:</strong> информация, которой нет в источнике. Она всегда подписывается и не заменяется догадкой ИИ.</li></ul><p>В верхней части приложения отображается режим работы. «MCP онлайн» означает живое соединение. «Демо-режим» означает, что карточки иллюстрируют интерфейс и не являются реальными предложениями.</p></section>
+
+      <section id="limitations"><h2>Ограничения прототипа</h2><ul><li>Прототип не бронирует и не оплачивает билеты.</li><li>Он не гарантирует фактическую доступность инфраструктуры.</li><li>Данные перевозчиков могут измениться после поиска.</li><li>Поддержка схем конкретных вокзалов и аэропортов пока не реализована.</li><li>Перед поездкой пользователь должен получить подтверждение перевозчика.</li></ul></section>
+
+      <section id="errors"><h2>Если что-то сломалось</h2><ol><li>Проверьте индикатор MCP в шапке.</li><li>Повторите поиск — запрос ограничен тайм-аутом и не зависает бесконечно.</li><li>Если включён демо-режим, не используйте цену и расписание для реальной покупки.</li><li>Для технической диагностики откройте <a href="/api/health"><code>/api/health</code></a>.</li></ol><div class="code">GET /api/health<br>GET /api/mcp/tools<br>POST /api/search</div></section>
+    </article>
+  </main>
+  <footer><span>Туту.Можно · прототип ИИ-хакатона 2026</span><a href="/">Вернуться к поиску</a></footer>
+</body>
+</html>

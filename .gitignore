@@ -1,0 +1,32 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# Python
+__pycache__/
+.venv/
+*.py[cod]
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
+*.log
+tmp/
+.tmp/
+
+# Предконкурсные визуальные заготовки не входят в сдаваемое решение
+ui-preview/
+docs/PROJECT_BRIEF.md
+docs/PRESENTATION_10_MIN.md

@@ -1,0 +1,138 @@
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import { TutuMcpClient } from "./src/mcp-client.mjs";
+import { createDemoRoutes, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
+
+const ROOT = fileURLToPath(new URL(".", import.meta.url));
+const PUBLIC_DIR = join(ROOT, "public");
+const PORT = Number(process.env.PORT || 3000);
+const MCP_URL = process.env.TUTU_MCP_URL || "https://mcp.tutu.ru/mcp";
+const FALLBACK_MODE = process.env.FALLBACK_MODE || "demo";
+const mcp = new TutuMcpClient({ url: MCP_URL });
+let lastMcpCheck = { ok: false, checkedAt: null, tools: [], error: "Ещё не проверено" };
+
+const server = createServer(async (request, response) => {
+  const startedAt = Date.now();
+  try {
+    setSecurityHeaders(response);
+    if (request.method === "GET" && request.url === "/api/health") return json(response, 200, await health());
+    if (request.method === "GET" && request.url === "/api/mcp/tools") return json(response, 200, await inspectMcp());
+    if (request.method === "POST" && request.url === "/api/search") {
+      const body = await readJsonBody(request);
+      const validation = validateSearchInput(body);
+      if (!validation.valid) return json(response, 400, { error: "Проверьте поля", fields: validation.errors });
+
+      try {
+        const mcpResult = await mcp.search(validation.value);
+        const routes = normalizeMcpResult(mcpResult, validation.value);
+        if (routes.length) {
+          return json(response, 200, {
+            mode: "live",
+            source: "Tutu MCP",
+            tool: mcpResult.tool,
+            searchedAt: new Date().toISOString(),
+            routes
+          });
+        }
+        throw new Error("MCP ответил, но предложения не удалось нормализовать");
+      } catch (error) {
+        if (FALLBACK_MODE !== "demo") throw error;
+        return json(response, 200, {
+          mode: "demo",
+          source: "Демонстрационные данные",
+          searchedAt: new Date().toISOString(),
+          warning: "Туту MCP сейчас недоступен или формат ответа ещё не поддержан. Эти результаты не являются реальными предложениями.",
+          diagnostic: process.env.NODE_ENV === "production" ? undefined : error.message,
+          routes: createDemoRoutes(validation.value)
+        });
+      }
+    }
+    if (request.method === "GET") return serveStatic(request.url, response);
+    json(response, 405, { error: "Method not allowed" });
+  } catch (error) {
+    console.error(JSON.stringify({ path: request.url, message: error.message, durationMs: Date.now() - startedAt }));
+    json(response, 500, { error: "Внутренняя ошибка", requestId: crypto.randomUUID() });
+  }
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Туту.Можно запущен: http://localhost:${PORT}`);
+  inspectMcp().catch(() => {});
+});
+
+async function inspectMcp() {
+  try {
+    const tools = await mcp.listTools({ refresh: true });
+    lastMcpCheck = {
+      ok: true,
+      checkedAt: new Date().toISOString(),
+      tools: tools.map(({ name, description }) => ({ name, description })),
+      error: null
+    };
+  } catch (error) {
+    lastMcpCheck = { ok: false, checkedAt: new Date().toISOString(), tools: [], error: error.message };
+  }
+  return lastMcpCheck;
+}
+
+async function health() {
+  return {
+    status: "ok",
+    service: "tutu-mozhno",
+    timestamp: new Date().toISOString(),
+    mcp: lastMcpCheck
+  };
+}
+
+async function serveStatic(rawUrl, response) {
+  const pathname = decodeURIComponent((rawUrl || "/").split("?")[0]);
+  const route = pathname === "/" ? "/index.html" : pathname === "/docs" ? "/docs.html" : pathname;
+  const safePath = normalize(route).replace(/^(\.\.[/\\])+/, "");
+  const filePath = join(PUBLIC_DIR, safePath);
+  if (!filePath.startsWith(PUBLIC_DIR)) return json(response, 403, { error: "Forbidden" });
+  try {
+    const info = await stat(filePath);
+    if (!info.isFile()) throw new Error("Not a file");
+    const content = await readFile(filePath);
+    response.writeHead(200, { "Content-Type": mimeType(filePath), "Cache-Control": "no-cache" });
+    response.end(content);
+  } catch {
+    json(response, 404, { error: "Страница не найдена" });
+  }
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > 100_000) throw new Error("Request body too large");
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+function json(response, status, payload) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  response.end(JSON.stringify(payload));
+}
+
+function setSecurityHeaders(response) {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+}
+
+function mimeType(path) {
+  return {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon"
+  }[extname(path)] || "application/octet-stream";
+}
