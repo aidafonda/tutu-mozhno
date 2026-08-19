@@ -164,6 +164,7 @@ function normalizeTutuOffer(offer, input, tool, index) {
     changes: Math.max(0, Number(offer.segments_count || 1) - 1),
     bookingUrl: offer.checkout_url || offer.search_results_url || "https://www.tutu.ru/",
     searchResultsUrl: offer.search_results_url,
+    checkoutRef: offer.checkout_ref || null,
     evidence: [
       { label: "Билет и расписание", state: "confirmed", note: "Подтверждено данными Туту" },
       { label: "Станции", state: "confirmed", note: `${offer.legs?.[0]?.from || segment.from || input.from} → ${lastLeg?.to || lastSegment.to || input.to}` },

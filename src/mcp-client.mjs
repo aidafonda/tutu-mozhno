@@ -123,6 +123,20 @@ export class TutuMcpClient {
 
     throw new McpError("Инструменты MCP не приняли параметры поиска", { attempts });
   }
+
+  async createCheckout(checkoutRef) {
+    if (!checkoutRef || typeof checkoutRef !== "object" || Array.isArray(checkoutRef)) {
+      throw new McpError("Некорректные данные выбранного предложения");
+    }
+    const result = await this.callTool("create_checkout_link", checkoutRef);
+    const text = result?.content?.find((item) => item.type === "text")?.text;
+    if (!text) throw new McpError("Туту не вернул ссылку продолжения");
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new McpError("Не удалось прочитать ссылку продолжения");
+    }
+  }
 }
 
 export function parseMcpResponse(text) {

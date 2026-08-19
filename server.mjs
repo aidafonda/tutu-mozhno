@@ -19,6 +19,22 @@ const server = createServer(async (request, response) => {
     setSecurityHeaders(response);
     if (request.method === "GET" && request.url === "/api/health") return json(response, 200, await health());
     if (request.method === "GET" && request.url === "/api/mcp/tools") return json(response, 200, await inspectMcp());
+    if (request.method === "POST" && request.url === "/api/checkout") {
+      const body = await readJsonBody(request);
+      try {
+        const checkout = await mcp.createCheckout(body.checkoutRef);
+        const url = checkout.checkout_url || checkout.search_results_url;
+        if (!url || !/^https:\/\//.test(url)) throw new Error("Туту не вернул безопасную ссылку");
+        return json(response, 200, {
+          url,
+          fallbackUrl: checkout.search_results_url || null,
+          kind: checkout.kind || "redirect",
+          note: checkout.fallback_note || checkout.note || null
+        });
+      } catch (error) {
+        return json(response, 422, { error: "Не удалось подготовить продолжение в Туту", detail: error.message });
+      }
+    }
     if (request.method === "POST" && request.url === "/api/search") {
       const body = await readJsonBody(request);
       const validation = validateSearchInput(body);
