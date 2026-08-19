@@ -27,7 +27,7 @@
     <section class="hero">
       <div class="eyebrow">Новый способ планировать поездки</div>
       <h1>Билет купить можно.<br><span>А добраться — точно?</span></h1>
-      <p class="hero-copy">Собираем доказательства по всей поездке и заранее показываем слабое звено. Если данных нет, так и говорим — без ложного обещания доступности.</p>
+      <p class="hero-copy">Показываем только те условия поездки, которые можем проверить в данных предложения. Непроверяемые обещания не предлагаем выбирать.</p>
       <div class="principles" aria-label="Принципы сервиса">
         <span>✓ Факты со ссылками</span><span>⌁ Неизвестное не скрываем</span><span>↗ Продолжаем оформление в Туту</span>
       </div>
@@ -66,15 +66,14 @@
 
         <fieldset class="needs">
           <legend><span class="step">02</span>Что важно именно вам?</legend>
-          <p>Мы спрашиваем про условия поездки, а не про состояние здоровья.</p>
+          <p id="requirementHint">Набор условий зависит от транспорта: здесь нет пунктов, которые сервис заведомо не умеет проверить.</p>
           <div class="need-grid">
-            <label class="choice"><input type="checkbox" name="stepFree" checked><span class="choice-icon">↗</span><span><strong>Без ступеней</strong><small>Лифт, пандус или ровный вход</small></span></label>
-            <label class="choice"><input type="checkbox" name="assistance" checked><span class="choice-icon">◆</span><span><strong>Нужно сопровождение</strong><small>Помощь на вокзале или в аэропорту</small></span></label>
-            <label class="choice"><input type="checkbox" name="accessibleToilet"><span class="choice-icon">●</span><span><strong>Доступный санузел</strong><small>На маршруте или в транспорте</small></span></label>
-            <label class="choice"><input type="checkbox" name="withChild"><span class="choice-icon">♙</span><span><strong>С ребёнком и коляской</strong><small>Добавим 1 ребёнка и проверим путь с коляской</small></span></label>
-            <label class="choice"><input type="checkbox" name="withPet"><span class="choice-icon">◇</span><span><strong>С питомцем</strong><small>Переноска, документы и правила тарифа</small></span></label>
-            <label class="choice"><input type="checkbox" name="heavyLuggage"><span class="choice-icon">▣</span><span><strong>Тяжёлый багаж</strong><small>Меньше пересадок и переносов</small></span></label>
-            <label class="choice walk-choice"><span class="choice-icon">↔</span><span><strong>Не больше <output id="walkOutput">300 м</output> пешком</strong><input type="range" name="maxWalk" min="100" max="1000" step="100" value="300" aria-label="Максимальная дистанция пешком"></span></label>
+            <label class="choice" data-modes="any,train,plane,bus"><input type="checkbox" name="directOnly" checked><span class="choice-icon">→</span><span><strong>Без пересадок</strong><small>Подтверждаем по сегментам маршрута</small></span></label>
+            <label class="choice" data-modes="plane,bus"><input type="checkbox" name="childPassenger"><span class="choice-icon">♙</span><span><strong>Еду с ребёнком</strong><small>Добавим ребёнка в состав пассажиров и цену</small></span></label>
+            <label class="choice" data-modes="plane,bus"><input type="checkbox" name="checkedBaggage"><span class="choice-icon">▣</span><span><strong>Нужен багаж</strong><small>Проверим тариф или правила выбранного рейса</small></span></label>
+            <label class="choice" data-modes="train,bus"><input type="checkbox" name="onboardToilet"><span class="choice-icon">●</span><span><strong>Туалет в транспорте</strong><small>Только факт наличия — не доступность для коляски</small></span></label>
+            <label class="choice" data-modes="train,bus"><input type="checkbox" name="airConditioning"><span class="choice-icon">❄</span><span><strong>Кондиционер</strong><small>Проверим в оснащении вагона или автобуса</small></span></label>
+            <label class="choice" data-modes="plane,bus"><input type="checkbox" name="seatSelection"><span class="choice-icon">▦</span><span><strong>Можно выбрать место</strong><small>Проверим условия тарифа или схему автобуса</small></span></label>
           </div>
         </fieldset>
 
@@ -90,11 +89,11 @@
     </section>
 
     <section class="how" id="how">
-      <div class="section-heading"><div><span class="step">03</span><h2>Не рейтинг, а объяснение</h2></div><p>Маршрут подходит ровно настолько, насколько подходит его самый сложный участок.</p></div>
+      <div class="section-heading"><div><span class="step">03</span><h2>Не предупреждение ради предупреждения</h2></div><p>Зелёный статус появляется, когда все выбранные проверяемые условия подтверждены.</p></div>
       <div class="how-grid">
         <article><span>1</span><h3>Ищем варианты</h3><p>Получаем актуальные предложения транспорта из Туту.</p></article>
-        <article><span>2</span><h3>Собираем доказательства</h3><p>Сверяем предложение с официальными паспортами объектов и деталями транспорта.</p></article>
-        <article><span>3</span><h3>Показываем действие</h3><p>Объясняем, что уточнить до оплаты и когда запросить помощь.</p></article>
+        <article><span>2</span><h3>Проверяем условия</h3><p>Читаем состав пассажиров, сегменты, тариф и оснащение конкретного предложения.</p></article>
+        <article><span>3</span><h3>Отделяем совпадения</h3><p>Зелёным отмечаем полное совпадение, красным — подтверждённое несоответствие.</p></article>
       </div>
     </section>
   </main>

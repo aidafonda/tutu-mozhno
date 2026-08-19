@@ -202,10 +202,11 @@ export function buildToolArguments(schema, input) {
     else if (matches(normalized, ["to", "destination", "arrivalcity", "tocity", "endcity", "куда"])) value = input.to;
     else if (matches(normalized, ["date", "departuredate", "startdate", "traveldate", "датавыезда"])) value = input.date;
     else if (matches(normalized, ["adults", "adult"])) value = input.adults || input.passengers || 1;
-    else if (matches(normalized, ["children", "child", "passengerschild"])) value = input.children || (input.withChild ? 1 : 0);
+    else if (matches(normalized, ["children", "child", "passengerschild"])) value = input.children || (input.childPassenger ? 1 : 0);
     else if (matches(normalized, ["infants", "infant", "passengersinfant"])) value = 0;
     else if (matches(normalized, ["passengers", "passengercount", "travelers"])) value = input.passengers || input.adults || 1;
     else if (matches(normalized, ["transport", "mode", "transporttype"])) value = input.mode;
+    else if (matches(normalized, ["directonly"]) && input.directOnly) value = true;
     else if (property.type === "object") {
       const nested = buildToolArguments(property, input);
       if (Object.keys(nested).length) value = nested;

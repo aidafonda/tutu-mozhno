@@ -1,20 +1,17 @@
-import { findFacility } from "./accessibility-registry.mjs";
-
 export function validateSearchInput(input = {}, { today = new Date().toISOString().slice(0, 10), maxAdvanceDays = 365 } = {}) {
   const adults = Math.max(1, Math.min(5, Number(input.adults || input.passengers || 1)));
-  const children = Boolean(input.withChild) ? Math.max(1, Math.min(4, Number(input.children || 1))) : 0;
+  const children = Boolean(input.childPassenger) ? Math.max(1, Math.min(4, Number(input.children || 1))) : 0;
   const clean = {
     from: String(input.from || "").trim(),
     to: String(input.to || "").trim(),
     date: String(input.date || "").trim(),
     mode: ["train", "plane", "bus", "any"].includes(input.mode) ? input.mode : "train",
-    maxWalk: Number(input.maxWalk || 300),
-    stepFree: Boolean(input.stepFree),
-    assistance: Boolean(input.assistance),
-    accessibleToilet: Boolean(input.accessibleToilet),
-    withChild: Boolean(input.withChild),
-    withPet: Boolean(input.withPet),
-    heavyLuggage: Boolean(input.heavyLuggage),
+    directOnly: Boolean(input.directOnly),
+    childPassenger: Boolean(input.childPassenger),
+    checkedBaggage: Boolean(input.checkedBaggage),
+    onboardToilet: Boolean(input.onboardToilet),
+    airConditioning: Boolean(input.airConditioning),
+    seatSelection: Boolean(input.seatSelection),
     adults,
     children,
     passengers: Math.min(5, adults + children)
@@ -26,6 +23,10 @@ export function validateSearchInput(input = {}, { today = new Date().toISOString
   else if (clean.date < today) errors.date = "Дата поездки уже прошла";
   else if (clean.date > addDays(today, maxAdvanceDays)) errors.date = "Выберите дату не дальше чем через год";
   if (clean.from.toLowerCase() === clean.to.toLowerCase()) errors.to = "Города должны отличаться";
+  if (clean.childPassenger && !["plane", "bus"].includes(clean.mode)) errors.requirements = "Детский пассажир подтверждается только для самолётов и автобусов";
+  if (clean.checkedBaggage && !["plane", "bus"].includes(clean.mode)) errors.requirements = "Багаж подтверждается только для самолётов и автобусов";
+  if ((clean.onboardToilet || clean.airConditioning) && !["train", "bus"].includes(clean.mode)) errors.requirements = "Оснащение транспорта подтверждается только для поездов и автобусов";
+  if (clean.seatSelection && !["plane", "bus"].includes(clean.mode)) errors.requirements = "Выбор места подтверждается только для самолётов и автобусов";
   return { value: clean, errors, valid: Object.keys(errors).length === 0 };
 }
 
@@ -45,9 +46,7 @@ export function createDemoRoutes(input) {
     changes,
     bookingUrl: "https://www.tutu.ru/",
     evidence: [
-      { label: "Расписание и цена", state: "demo", note: "Демонстрационные данные — не актуальное предложение Туту" },
-      { label: "Безбарьерный вход", state: "unknown", note: "Нужно подтверждение перевозчика" },
-      { label: "Помощь при посадке", state: input.assistance ? "action" : "unknown", note: input.assistance ? "Запросить заранее" : "Не запрашивалась" }
+      { label: "Расписание и цена", state: "demo", note: "Демонстрационные данные — не актуальное предложение Туту" }
     ]
   });
 
@@ -64,13 +63,14 @@ export function assessRoute(route, input) {
   const evidence = [...baseEvidence, ...checks];
   const unknown = checks.filter((item) => item.state === "unknown");
   const partial = checks.filter((item) => item.state === "partial");
+  const missing = checks.filter((item) => item.state === "missing");
   const unresolved = [...partial, ...unknown];
   const requiredActions = checks.filter((item) => item.state === "action");
   const actions = unique(checks.map((item) => item.action).filter(Boolean));
   const confirmed = checks.filter((item) => item.state === "confirmed").length;
   const total = checks.length;
-  const status = route.source === "demo" || unresolved.length ? "verify" : requiredActions.length ? "action" : "fits";
-  const weakest = unresolved[0] || checks.find((item) => item.state === "action");
+  const status = route.source === "demo" ? "verify" : missing.length ? "not-fit" : unresolved.length ? "verify" : requiredActions.length ? "action" : "fits";
+  const weakest = missing[0] || unresolved[0] || checks.find((item) => item.state === "action");
 
   return {
     ...route,
@@ -78,10 +78,10 @@ export function assessRoute(route, input) {
     evidence,
     accessibility: {
       status,
-      label: status === "fits" ? "Требования подтверждены" : status === "action" ? "Нужно действие" : "Есть неизвестные условия",
-      weakestLink: weakest?.note || "Все выбранные условия подтверждены источниками",
-      coverage: { confirmed, total, partial: partial.length, unknown: unknown.length, actions: requiredActions.length },
-      risks: unresolved.map((item) => item.note),
+      label: status === "fits" ? (total ? "Все условия подтверждены" : "Маршрут найден") : status === "not-fit" ? "Не соответствует" : status === "action" ? "Нужно действие" : "Есть неизвестные условия",
+      weakestLink: weakest?.note || (total ? "Все выбранные условия подтверждены данными предложения" : "Дополнительные условия не выбраны"),
+      coverage: { confirmed, total, partial: partial.length, unknown: unknown.length, missing: missing.length, actions: requiredActions.length },
+      risks: [...missing, ...unresolved].map((item) => item.note),
       actions: actions.length ? actions : ["Перед оплатой ещё раз проверьте актуальность условий у перевозчика"]
     }
   };
@@ -89,65 +89,31 @@ export function assessRoute(route, input) {
 
 function buildRequirementChecks(route, input) {
   const checks = [];
-  const isRail = ["rail", "railway"].includes(route.productType);
-  const origin = isRail ? findFacility(route.from, "rail_station") : null;
-  const destination = isRail ? findFacility(route.to, "rail_station") : null;
-  const sourceFor = (facility) => facility ? { ...facility.source, facility: facility.name } : null;
-
-  if (input.stepFree) {
-    if (route.changes > 0) {
-      checks.push(evidence("Маршрут без ступеней", "unknown", "Пересадка есть, но переход между её точками не описан в данных.", null, "Уточнить доступность пересадки у перевозчика"));
-    } else if (origin?.facts.stepFree && destination?.facts.stepFree) {
-      const partial = [origin, destination].find((facility) => facility.facts.stepFree.status !== "confirmed");
-      checks.push(evidence("Путь без ступеней", partial ? "partial" : "confirmed", partial
-        ? `${partial.name}: ${partial.facts.stepFree.note}`
-        : `Входы и пути движения подтверждены для ${origin.name} и ${destination.name}.`, sourceFor(partial || origin), partial ? "Заказать сопровождение и уточнить доступный вход" : null));
-    } else {
-      checks.push(evidence("Путь без ступеней", "unknown", "Для одного или обоих объектов нет официального паспорта в пилотном реестре.", null, "Проверить вокзалы или аэропорты до оплаты"));
-    }
+  const hasDetails = Boolean(route.vehicleFacts?.detailsChecked);
+  if (input.directOnly) checks.push(evidence("Без пересадок", route.changes === 0 ? "confirmed" : "missing", route.changes === 0 ? "Прямой маршрут подтверждён предложением Туту." : `В маршруте пересадок: ${route.changes}.`));
+  if (input.childPassenger) {
+    const included = Number(route.offerFacts?.passengersChild || 0) > 0;
+    checks.push(evidence("Ребёнок включён в поиск", included ? "confirmed" : "missing", included ? "Цена и предложение рассчитаны для 1 взрослого и 1 ребёнка." : "Состав пассажиров с ребёнком не подтверждён в предложении."));
   }
-
-  if (input.assistance) {
-    const facility = origin?.facts.assistance ? origin : destination?.facts.assistance ? destination : null;
-    checks.push(facility
-      ? evidence("Сопровождение", "action", `${facility.facts.assistance.note} Рекомендуемый срок — не менее ${facility.facts.assistance.leadTimeHours} ч.`, sourceFor(facility), `Оформить заявку в ЦСМ РЖД не менее чем за ${facility.facts.assistance.leadTimeHours} ч: ${facility.facts.assistance.phone}`)
-      : evidence("Сопровождение", "unknown", "MCP не сообщает, доступна ли помощь для выбранного рейса и объекта.", null, "Связаться с перевозчиком и получить подтверждение"));
-  }
-
-  if (input.accessibleToilet) {
-    const confirmedFacilities = [origin, destination].filter((facility) => facility?.facts.accessibleToilet?.status === "confirmed");
-    const vehicleNote = route.vehicleFacts?.hasBioToilet
-      ? "В вагоне есть биотуалет, но MCP не подтверждает, что он доступен для кресла-коляски."
-      : route.vehicleFacts?.hasToilet
-        ? "В автобусе указан туалет, но его доступность для кресла-коляски не подтверждена."
-        : "Доступность санузла в транспорте не подтверждена.";
-    checks.push(confirmedFacilities.length
-      ? evidence("Доступный санузел", "partial", `Подтверждён на ${confirmedFacilities.map((item) => item.name).join(" и ")}. ${vehicleNote}`, sourceFor(confirmedFacilities[0]), "Уточнить доступный санузел в выбранном вагоне")
-      : evidence("Доступный санузел", "unknown", vehicleNote, null, "Уточнить санузел у перевозчика"));
-  }
-
-  if (input.withChild) {
-    const childIncluded = Number(route.offerFacts?.passengersChild || 0) > 0;
-    checks.push(evidence("Ребёнок и коляска", childIncluded ? "partial" : "unknown", route.changes
-      ? `${childIncluded ? "Ребёнок учтён в поиске. " : ""}Есть пересадка; путь с коляской и время на переход не подтверждены.`
-      : childIncluded
-        ? "Ребёнок учтён в поиске, но правила провоза коляски в предложении не указаны."
-        : "Маршрут прямой, но детский тариф и правила провоза коляски не подтверждены.", null, "Проверить детский тариф и правила провоза коляски"));
-  }
-  if (input.withPet) checks.push(evidence("Поездка с питомцем", "unknown", "В проверенных данных MCP нет подтверждения правил для питомца по выбранному тарифу.", null, "Проверить переноску, документы и правила тарифа"));
-  if (input.heavyLuggage) {
+  if (input.checkedBaggage) {
     const baggage = route.offerFacts?.checkedBaggage;
     const busLuggage = route.vehicleFacts?.luggageCompartment || route.vehicleFacts?.luggageAvailable;
-    const baggageNote = baggage
-      ? `В одном из вариантов тарифа указан сдаваемый багаж${baggage.kg ? ` до ${baggage.kg} кг` : ""}${baggage.pieces ? `, мест: ${baggage.pieces}` : ""}; итоговая цена зависит от выбранного тарифа.`
-      : busLuggage
-        ? "В деталях автобуса указана возможность провоза багажа, но помощь с ним не подтверждена."
-        : "Пересадок нет, но помощь с багажом и допустимая норма требуют подтверждения.";
-    checks.push(evidence("Тяжёлый багаж", route.changes ? "unknown" : (baggage || busLuggage) ? "partial" : "unknown", route.changes
-      ? "Пересадка потребует переноса багажа; доступный переход не подтверждён."
-      : baggageNote, null, "Выбрать подходящий тариф и заказать помощь при необходимости"));
+    checks.push(evidence("Провоз багажа", baggage || busLuggage ? "confirmed" : hasDetails || route.productType === "avia" ? "missing" : "unknown", baggage
+      ? `В доступном тарифе указан сдаваемый багаж${baggage.kg ? ` до ${baggage.kg} кг` : ""}${baggage.pieces ? `, мест: ${baggage.pieces}` : ""}.`
+      : busLuggage ? "В деталях рейса указана возможность провоза багажа." : "Провоз багажа не подтверждён данными предложения."));
   }
-  if (Number(input.maxWalk) < 1000) checks.push(evidence(`Не более ${input.maxWalk} м пешком`, "unknown", "MCP и реестр не содержат полной длины пути внутри объектов и на пересадках.", null, "Уточнить расстояния внутри вокзала или аэропорта"));
+  if (input.onboardToilet) {
+    const present = route.vehicleFacts?.hasBioToilet || route.vehicleFacts?.hasToilet;
+    checks.push(evidence("Туалет в транспорте", present ? "confirmed" : hasDetails ? "missing" : "unknown", present ? "Туалет указан в оснащении выбранного предложения." : "Туалет не указан в оснащении предложения."));
+  }
+  if (input.airConditioning) {
+    const present = route.vehicleFacts?.hasAirConditioning;
+    checks.push(evidence("Кондиционер", present ? "confirmed" : hasDetails ? "missing" : "unknown", present ? "Кондиционер указан в оснащении предложения." : "Кондиционер не указан в оснащении предложения."));
+  }
+  if (input.seatSelection) {
+    const available = route.offerFacts?.seatSelectionAvailable || route.vehicleFacts?.seatSelectionAvailable;
+    checks.push(evidence("Выбор места", available ? "confirmed" : hasDetails || route.productType === "avia" ? "missing" : "unknown", available ? "Выбор места доступен для предложения." : "Выбор места не подтверждён данными предложения."));
+  }
 
   return checks;
 }
@@ -186,7 +152,7 @@ export async function enrichRoutes(routes, input, mcp) {
 }
 
 function extractVehicleFacts(details, productType) {
-  if (!details) return { detailsChecked: false, amenities: [], hasBioToilet: false, hasToilet: false, luggageCompartment: false, luggageAvailable: false };
+  if (!details) return { detailsChecked: false, amenities: [], hasBioToilet: false, hasToilet: false, luggageCompartment: false, luggageAvailable: false, seatSelectionAvailable: false };
   const rawAmenities = productType === "bus"
     ? (details.amenities || [])
     : (details.service_classes || []).flatMap((item) => item.amenities || []);
@@ -199,13 +165,14 @@ function extractVehicleFacts(details, productType) {
     hasAirConditioning: amenities.includes("AIR_CONDITIONING") || amenities.includes("CONDITIONER"),
     hasToilet: amenities.includes("TOILET"),
     luggageCompartment: amenities.includes("LUGGAGE_COMPARTMENT"),
-    luggageAvailable: Boolean(details.luggage?.available ?? details.luggage?.included ?? details.luggage)
+    luggageAvailable: Boolean(details.luggage?.available ?? details.luggage?.included ?? details.luggage),
+    seatSelectionAvailable: Boolean(details.seat_selection?.available === true || details.seat_selection?.required === true || Number(details.seat_selection?.free_count || 0) > 0 || details.seat_selection?.available_seat_ids?.length)
   };
 }
 
 function routeRiskScore(route) {
   const coverage = route.accessibility?.coverage || {};
-  return (coverage.unknown || 0) * 20 + (coverage.partial || 0) * 8 + (coverage.actions || 0) * 3 + (route.changes || 0) * 2 - (coverage.confirmed || 0);
+  return (coverage.missing || 0) * 40 + (coverage.unknown || 0) * 20 + (coverage.partial || 0) * 8 + (coverage.actions || 0) * 3 + (route.changes || 0) * 2 - (coverage.confirmed || 0);
 }
 
 export function normalizeMcpResult(mcpResponse, input) {
@@ -261,6 +228,10 @@ function normalizeTutuOffer(offer, input, tool, index) {
   const voyageNumber = segment.voyage_no;
   const categories = Object.keys(offer.fares?.seat_categories || {}).map(categoryLabel);
   const review = offer.review_summary?.label;
+  const offerFacts = extractOfferFacts(offer);
+  const selectedPrice = input.checkedBaggage && offerFacts.checkedBaggage?.price
+    ? offerFacts.checkedBaggage.price
+    : Number(offer.price?.amount || 0);
 
   const route = {
     id: offer.offer_id || `mcp-${index}`,
@@ -272,13 +243,14 @@ function normalizeTutuOffer(offer, input, tool, index) {
     departure: offer.departure_at || segment.departure_at,
     arrival: offer.arrival_at || lastSegment.arrival_at,
     durationMinutes: Number(offer.duration_min || segment.duration_min || 0),
-    price: Number(offer.price?.amount || 0),
+    price: selectedPrice,
+    priceBasis: offerFacts.passengersAdult + offerFacts.passengersChild > 1 ? "за всех пассажиров" : input.checkedBaggage && offerFacts.checkedBaggage ? "тариф с багажом" : "за пассажира",
     currency: offer.price?.currency || "RUB",
     changes: Math.max(0, Number(offer.segments_count || 1) - 1),
     bookingUrl: preferredBookingUrl(offer),
     searchResultsUrl: offer.search_results_url,
     detailsRef: offer.details_ref || null,
-    offerFacts: extractOfferFacts(offer),
+    offerFacts,
     evidence: [
       { label: "Билет и расписание", state: "confirmed", note: "Подтверждено данными Туту" },
       { label: "Станции", state: "confirmed", note: `${offer.legs?.[0]?.from || segment.from || input.from} → ${lastLeg?.to || lastSegment.to || input.to}` },
@@ -291,18 +263,20 @@ function normalizeTutuOffer(offer, input, tool, index) {
 
 function extractOfferFacts(offer) {
   const variants = Array.isArray(offer.variants) ? offer.variants : [];
-  const baggageOptions = variants
-    .map((variant) => variant?.conditions?.baggage)
-    .filter(Boolean);
-  const checkedBaggage = baggageOptions.find((item) => Number(item.pieces || 0) > 0 || Number(item.kg || item.weight_kg || 0) > 0) || null;
+  const baggageVariant = variants.find((variant) => Number(variant?.conditions?.baggage?.pieces || 0) > 0 || Number(variant?.conditions?.baggage?.kg || variant?.conditions?.baggage?.weight_kg || 0) > 0) || null;
+  const checkedBaggage = baggageVariant?.conditions?.baggage || null;
   const passengerRef = offer.checkout_ref || offer.details_ref || {};
   return {
     passengersAdult: Number(passengerRef.passengers_full ?? passengerRef.adults ?? 0),
     passengersChild: Number(passengerRef.passengers_child ?? passengerRef.children ?? 0),
-    seatSelectionAvailable: variants.some((variant) => variant?.conditions?.seat_selection === true),
+    seatSelectionAvailable: variants.some((variant) => {
+      const value = variant?.conditions?.seat_selection;
+      return value === true || /^available/i.test(String(value || ""));
+    }),
     checkedBaggage: checkedBaggage ? {
       pieces: Number(checkedBaggage.pieces || 0),
-      kg: Number(checkedBaggage.kg || checkedBaggage.weight_kg || 0)
+      kg: Number(checkedBaggage.kg || checkedBaggage.weight_kg || 0),
+      price: Number(baggageVariant?.price?.amount || baggageVariant?.price || 0)
     } : null
   };
 }

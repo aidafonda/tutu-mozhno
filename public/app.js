@@ -3,15 +3,16 @@ const results = document.querySelector("#results");
 const resultContent = document.querySelector("#resultContent");
 const submitButton = document.querySelector("#submitButton");
 const dateInput = document.querySelector("#date");
-const walkInput = form.elements.maxWalk;
-const walkOutput = document.querySelector("#walkOutput");
 const mcpStatus = document.querySelector("#mcpStatus");
+const modeInput = form.elements.mode;
+const requirementChoices = [...document.querySelectorAll("[data-modes]")];
 
 const tomorrow = new Date(Date.now() + 86_400_000);
 dateInput.min = new Date().toISOString().slice(0, 10);
 dateInput.value = tomorrow.toISOString().slice(0, 10);
 
-walkInput.addEventListener("input", () => { walkOutput.value = `${walkInput.value} м`; });
+updateAvailableRequirements();
+modeInput.addEventListener("change", updateAvailableRequirements);
 document.querySelector("#swapCities").addEventListener("click", () => {
   [form.elements.from.value, form.elements.to.value] = [form.elements.to.value, form.elements.from.value];
 });
@@ -20,12 +21,9 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   clearErrors();
   const payload = Object.fromEntries(new FormData(form));
-  payload.stepFree = form.elements.stepFree.checked;
-  payload.assistance = form.elements.assistance.checked;
-  payload.accessibleToilet = form.elements.accessibleToilet.checked;
-  payload.withChild = form.elements.withChild.checked;
-  payload.withPet = form.elements.withPet.checked;
-  payload.heavyLuggage = form.elements.heavyLuggage.checked;
+  for (const name of ["directOnly", "childPassenger", "checkedBaggage", "onboardToilet", "airConditioning", "seatSelection"]) {
+    payload[name] = Boolean(form.elements[name]?.checked && !form.elements[name].closest("[data-modes]")?.hidden);
+  }
 
   setLoading(payload);
   try {
@@ -69,7 +67,7 @@ function setLoading(payload) {
     <div class="loading-card">
       <div class="loader" aria-hidden="true"><span></span><span></span><span></span></div>
       <div><p class="eyebrow">Проверяем всю цепочку</p><h2>${escapeHtml(payload.from)} → ${escapeHtml(payload.to)}</h2>
-      <ol><li class="done">Подбираем предложения Туту</li><li>Сверяем ваши требования</li><li>Ищем слабое звено</li></ol></div>
+      <ol><li class="done">Подбираем предложения Туту</li><li>Сверяем проверяемые условия</li><li>Сортируем полные совпадения</li></ol></div>
     </div>`;
   results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -87,9 +85,8 @@ function renderResults(data, payload) {
     ${demo ? `<div class="mode-banner" role="status"><strong>Демонстрационный режим.</strong> ${escapeHtml(data.warning)}</div>` : ""}
     ${corrections.length ? `<div class="correction-banner" role="status"><span>✓</span><div><strong>Уточнили направление</strong><p>${corrections.join(" · ")}</p></div></div>` : ""}
     ${unavailable.length ? `<div class="mode-banner"><strong>Учли ограничения маршрута.</strong> Не нашли варианты: ${escapeHtml(unavailable.join(", "))}. Показываем доступные виды транспорта.</div>` : ""}
-    ${data.registry ? `<div class="registry-banner"><span>Пилотный реестр</span><p>Инфраструктурные выводы основаны на ${data.registry.facilities} официальных паспортах объектов. Для остальных точек честно показываем «нет данных».</p><a href="/registry" target="_blank" rel="noreferrer">Открыть реестр ↗</a></div>` : ""}
     <div class="results-header">
-      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Проверенные предложения"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Мы не называем маршрут доступным, пока каждое выбранное условие не подтверждено.</p></div>
+      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Проверенные предложения"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Сверили только выбранные условия, которые действительно доступны в данных.</p></div>
       <div class="source-badge"><span></span>Обновлено ${formatSearchTime(data.searchedAt)}</div>
     </div>
     <div class="route-list">${data.routes.map((route, index) => routeCard(route, index, data.routes.length)).join("")}</div>`;
@@ -99,10 +96,10 @@ function routeCard(route, index, total) {
   const departure = formatDateTime(route.departure);
   const arrival = formatDateTime(route.arrival);
   const status = route.accessibility?.status || "verify";
-  const coverage = route.accessibility?.coverage || { confirmed: 0, total: 0, partial: 0, unknown: 0, actions: 0 };
+  const coverage = route.accessibility?.coverage || { confirmed: 0, total: 0, partial: 0, unknown: 0, missing: 0, actions: 0 };
   const coverageText = coverage.total
     ? `${coverage.confirmed} из ${coverage.total} условий полностью подтверждено`
-    : "Выбранные условия ещё не проверены";
+    : "Дополнительные условия не выбраны";
   return `
     <article class="route-card ${index === 0 ? "recommended" : ""}">
       <div class="route-top">
@@ -113,10 +110,10 @@ function routeCard(route, index, total) {
         <div class="time"><strong>${departure.time}</strong><span>${escapeHtml(route.from)}</span><small>${departure.date}</small></div>
         <div class="journey"><span>${durationLabel(route.durationMinutes)}</span><div><i></i><i></i></div><small>${route.changes ? `${route.changes} пересадка` : "Без пересадок"}</small></div>
         <div class="time"><strong>${arrival.time}</strong><span>${escapeHtml(route.to)}</span><small>${arrival.date}</small></div>
-        <div class="price"><strong>${route.price ? `${number(route.price)} ₽` : "Цена в Туту"}</strong><span>за пассажира</span></div>
+        <div class="price"><strong>${route.price ? `${number(route.price)} ₽` : "Цена в Туту"}</strong><span>${escapeHtml(route.priceBasis || "за пассажира")}</span></div>
       </div>
-      <div class="coverage-line"><strong>${escapeHtml(coverageText)}</strong><span>${coverage.partial ? `Частично: ${coverage.partial} · ` : ""}${coverage.unknown ? `нет данных: ${coverage.unknown}` : "нет неизвестных условий"}${coverage.actions ? ` · обязательных действий: ${coverage.actions}` : ""}</span></div>
-      <div class="weakest"><span aria-hidden="true">!</span><div><strong>Слабое звено</strong><p>${escapeHtml(route.accessibility?.weakestLink || "Требуется проверка")}</p></div></div>
+      <div class="coverage-line"><strong>${escapeHtml(coverageText)}</strong><span>${coverage.missing ? `не соответствует: ${coverage.missing} · ` : ""}${coverage.partial ? `частично: ${coverage.partial} · ` : ""}${coverage.unknown ? `нет данных: ${coverage.unknown}` : "нет неизвестных условий"}${coverage.actions ? ` · обязательных действий: ${coverage.actions}` : ""}</span></div>
+      <div class="weakest ${status === "fits" ? "is-ok" : ""}"><span aria-hidden="true">${status === "fits" ? "✓" : "!"}</span><div><strong>${status === "fits" ? "Результат проверки" : status === "not-fit" ? "Не выполнено" : "Требует проверки"}</strong><p>${escapeHtml(route.accessibility?.weakestLink || "Требуется проверка")}</p></div></div>
       <details>
         <summary>Почему такой вывод <span>+</span></summary>
         <div class="evidence-list">${(route.evidence || []).map(evidenceCard).join("")}</div>
@@ -133,7 +130,7 @@ function evidenceCard(item) {
   const source = item.source?.url
     ? `<a href="${safeUrl(item.source.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.source.publisher || "Источник")}${item.source.checkedAt ? ` · проверено ${formatShortDate(item.source.checkedAt)}` : ""} ↗</a>`
     : "";
-  const stateLabel = ({ confirmed: "Подтверждено", partial: "Частично", action: "Нужно действие", unknown: "Нет данных", demo: "Демо" })[item.state] || "Статус неизвестен";
+  const stateLabel = ({ confirmed: "Подтверждено", partial: "Частично", action: "Нужно действие", unknown: "Нет данных", missing: "Не соответствует", demo: "Демо" })[item.state] || "Статус неизвестен";
   return `<div class="evidence-card"><i class="evidence-${item.state}"></i><span><em>${stateLabel}</em><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.note)}</small>${source}</span></div>`;
 }
 
@@ -174,6 +171,17 @@ function showErrors(errors) {
 function clearErrors() {
   form.querySelectorAll("[aria-invalid]").forEach((input) => input.removeAttribute("aria-invalid"));
   form.querySelectorAll(".field-error").forEach((item) => { item.textContent = ""; });
+}
+
+function updateAvailableRequirements() {
+  const mode = modeInput.value;
+  for (const choice of requirementChoices) {
+    const visible = choice.dataset.modes.split(",").includes(mode);
+    choice.hidden = !visible;
+    if (!visible) choice.querySelector("input").checked = false;
+  }
+  const labels = { any: "Для поиска по всем видам транспорта можем строго проверить только отсутствие пересадок.", train: "Для поездов проверяем маршрут и оснащение конкретного вагона.", plane: "Для самолётов проверяем пассажиров и условия конкретных тарифов.", bus: "Для автобусов проверяем пассажиров, багаж и оснащение рейса." };
+  document.querySelector("#requirementHint").textContent = labels[mode];
 }
 
 function formatDateTime(value) {

@@ -32,7 +32,7 @@ test("builds arguments from a discovered MCP schema", () => {
 
 test("passes a child to MCP as a real passenger", () => {
   const schema = { properties: { adults: { type: "integer" }, children: { type: "integer" }, passengers: { type: "integer" } } };
-  assert.deepEqual(buildToolArguments(schema, { adults: 1, children: 1, passengers: 2, withChild: true }), {
+  assert.deepEqual(buildToolArguments(schema, { adults: 1, children: 1, passengers: 2, childPassenger: true }), {
     adults: 1, children: 1, passengers: 2
   });
 });
@@ -95,7 +95,7 @@ test("parses an SSE MCP response", () => {
 });
 
 test("labels demo evidence honestly", () => {
-  const [route] = createDemoRoutes({ from: "Москва", to: "Казань", date: "2026-08-20", mode: "train", stepFree: true, assistance: true });
+  const [route] = createDemoRoutes({ from: "Москва", to: "Казань", date: "2026-08-20", mode: "train", directOnly: true });
   assert.equal(route.source, "demo");
   assert.equal(route.accessibility.status, "verify");
   assert.match(route.evidence[0].note, /Демонстрационные/);
@@ -107,13 +107,13 @@ test("normalizes resolved city and live multitransport variants", () => {
     meta: { from: { name: "Салехард" }, to: { name: "Санкт-Петербург" }, unavailable: [{ mode: "railway", reason: "no_route" }] }
   };
   const response = { tool: "search_multitransport", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
-  const input = { from: "Салехард", to: "Питер", mode: "any", withPet: true };
+  const input = { from: "Салехард", to: "Питер", mode: "any" };
   const routes = normalizeMcpResult(response, input);
   const context = extractMcpContext(response, input);
   assert.equal(routes.length, 1);
   assert.equal(routes[0].productType, "avia");
   assert.match(routes[0].transport, /Ямал/);
-  assert.match(routes[0].accessibility.risks.join(" "), /питомца/);
+  assert.equal(routes[0].accessibility.status, "fits");
   assert.equal(routes[0].bookingUrl, "https://avia.tutu.ru/example");
   assert.equal(context.resolvedTo, "Санкт-Петербург");
   assert.equal(context.unavailable[0].mode, "railway");
@@ -122,32 +122,36 @@ test("normalizes resolved city and live multitransport variants", () => {
 test("does not invent offers from MCP metadata", () => {
   const payload = { meta: { total_matched: 0, from: { name: "Сен-Пьер", offer_hint: "none" }, price_stats: { min: 0 } } };
   const response = { tool: "search_multitransport", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
-  assert.deepEqual(normalizeMcpResult(response, { from: "Абырвалг", to: "Москва", mode: "any", maxWalk: 300 }), []);
+  assert.deepEqual(normalizeMcpResult(response, { from: "Абырвалг", to: "Москва", mode: "any" }), []);
   assert.equal(extractMcpContext(response, { from: "Абырвалг", to: "Москва" }).resolvedFrom, "Абырвалг");
 });
 
-test("uses avia passenger and baggage facts without overstating accessibility", async () => {
+test("confirms avia passenger and baggage from offer facts", async () => {
   const payload = { variants: [{
     offer_id: "avia-1", transport: "avia", duration_min: 120, segments_count: 1,
     checkout_ref: { passengers_full: 1, passengers_child: 1 },
-    variants: [{ conditions: { baggage: { pieces: 1, kg: 23 }, seat_selection: true } }],
+    variants: [{ price: { amount: 12500 }, conditions: { baggage: { pieces: 1, kg: 23 }, seat_selection: "available_paid" } }],
     price: { amount: 10000 }, legs: [{ from: "Москва", to: "Сочи", segments: [] }]
   }] };
   const response = { tool: "search_avia", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
-  const [route] = await enrichRoutes(normalizeMcpResult(response, { from: "Москва", to: "Сочи", mode: "plane" }), {
-    withChild: true, heavyLuggage: true, maxWalk: 2000
+  const criteria = { from: "Москва", to: "Сочи", mode: "plane", childPassenger: true, checkedBaggage: true };
+  const [route] = await enrichRoutes(normalizeMcpResult(response, criteria), {
+    childPassenger: true, checkedBaggage: true
   }, { getOfferDetails: async () => null });
   assert.equal(route.offerFacts.passengersChild, 1);
   assert.equal(route.offerFacts.checkedBaggage.kg, 23);
-  assert.equal(route.accessibility.coverage.partial, 2);
-  assert.match(route.evidence.find((item) => item.label === "Тяжёлый багаж").note, /23 кг/);
+  assert.equal(route.offerFacts.seatSelectionAvailable, true);
+  assert.equal(route.price, 12500);
+  assert.equal(route.accessibility.coverage.confirmed, 2);
+  assert.equal(route.accessibility.status, "fits");
+  assert.match(route.evidence.find((item) => item.label === "Провоз багажа").note, /23 кг/);
 });
 
-test("enriches bus amenities but does not call a generic toilet accessible", async () => {
+test("confirms only explicitly requested bus amenities", async () => {
   const [route] = await enrichRoutes([{
     id: "bus-1", source: "mcp", productType: "bus", from: "Москва", to: "Тула", changes: 0,
     durationMinutes: 180, detailsRef: { offer_id: "bus-1" }, evidence: []
-  }], { accessibleToilet: true, heavyLuggage: true, maxWalk: 2000 }, {
+  }], { onboardToilet: true, checkedBaggage: true }, {
     getOfferDetails: async (type) => {
       assert.equal(type, "bus");
       return { amenities: [{ code: "toilet", enabled: true }, { code: "luggage_compartment", enabled: true }] };
@@ -155,8 +159,8 @@ test("enriches bus amenities but does not call a generic toilet accessible", asy
   });
   assert.equal(route.vehicleFacts.hasToilet, true);
   assert.equal(route.vehicleFacts.luggageCompartment, true);
-  assert.equal(route.accessibility.status, "verify");
-  assert.match(route.evidence.find((item) => item.label === "Доступный санузел").note, /не подтверждена/);
+  assert.equal(route.accessibility.status, "fits");
+  assert.equal(route.accessibility.coverage.confirmed, 2);
 });
 
 test("matches an exact station from the official pilot registry", () => {
@@ -167,34 +171,30 @@ test("matches an exact station from the official pilot registry", () => {
   assert.equal(publicRegistry().facilities.length, 2);
 });
 
-test("never calls a route accessible while a selected condition is unknown", () => {
-  const route = assessRoute({
-    source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)",
-    to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, evidence: []
-  }, { stepFree: true, assistance: true, accessibleToilet: true, maxWalk: 300 });
-  assert.equal(route.accessibility.status, "verify");
-  assert.ok(route.accessibility.coverage.unknown > 0);
-  assert.match(route.accessibility.weakestLink, /частично доступ/i);
-  assert.ok(route.evidence.some((item) => item.source?.url));
+test("rejects a criterion that the selected transport cannot verify", () => {
+  const result = validateSearchInput({ from: "Москва", to: "Санкт-Петербург", date: "2026-08-20", mode: "train", childPassenger: true });
+  assert.equal(result.valid, false);
+  assert.match(result.errors.requirements, /самолётов и автобусов/);
 });
 
-test("enriches a rail offer with live vehicle details without treating a bio toilet as accessible", async () => {
+test("confirms rail toilet and air conditioning from live vehicle details", async () => {
   const routes = await enrichRoutes([{
     id: "1", source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)",
     to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 240,
     detailsRef: { offer_id: "1" }, evidence: []
-  }], { accessibleToilet: true, maxWalk: 300 }, {
+  }], { onboardToilet: true, airConditioning: true }, {
     getOfferDetails: async () => ({ service_classes: [{ amenities: [{ code: "BIO_TOILET" }, { code: "AIR_CONDITIONING" }] }] })
   });
   assert.equal(routes[0].vehicleFacts.hasBioToilet, true);
-  assert.equal(routes[0].accessibility.status, "verify");
-  assert.match(routes[0].accessibility.risks.join(" "), /не подтверждает/i);
+  assert.equal(routes[0].accessibility.status, "fits");
+  assert.equal(routes[0].accessibility.coverage.confirmed, 2);
 });
 
-test("ranks partial official evidence above completely unknown infrastructure", async () => {
+test("ranks a confirmed amenity above a confirmed mismatch", async () => {
   const routes = await enrichRoutes([
-    { id: "unknown", source: "mcp", productType: "railway", from: "Москва — Восточный вокзал (2001025)", to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 220, evidence: [] },
-    { id: "partial", source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)", to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 250, evidence: [] }
-  ], { stepFree: true, maxWalk: 300 }, { getOfferDetails: async () => null });
-  assert.equal(routes[0].id, "partial");
+    { id: "missing", source: "mcp", productType: "railway", from: "Москва", to: "Санкт-Петербург", changes: 0, durationMinutes: 220, detailsRef: { id: "missing" }, evidence: [] },
+    { id: "confirmed", source: "mcp", productType: "railway", from: "Москва", to: "Санкт-Петербург", changes: 0, durationMinutes: 250, detailsRef: { id: "confirmed" }, evidence: [] }
+  ], { onboardToilet: true }, { getOfferDetails: async (_type, ref) => ({ service_classes: [{ amenities: ref.id === "confirmed" ? [{ code: "BIO_TOILET" }] : [] }] }) });
+  assert.equal(routes[0].id, "confirmed");
+  assert.equal(routes[1].accessibility.status, "not-fit");
 });

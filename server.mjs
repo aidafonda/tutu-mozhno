@@ -43,7 +43,6 @@ const server = createServer(async (request, response) => {
             tool: mcpResult.tool,
             searchedAt: new Date().toISOString(),
             context,
-            registry: { version: publicRegistry().version, facilities: publicRegistry().facilities.length },
             routes: routes.map(publicRoute)
           });
         }

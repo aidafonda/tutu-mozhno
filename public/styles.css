@@ -13,11 +13,14 @@
   --orange: var(--violet);
   --orange-soft: var(--violet-soft);
   --blue: #5f54e8;
+  --red: #c43d4b;
+  --red-soft: #fff0f1;
   --line: #e0e2ed;
   --shadow: 0 18px 52px rgba(25, 20, 91, .12);
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body { margin: 0; color: var(--ink); background: var(--canvas); font-family: Inter, "Segoe UI", Arial, sans-serif; line-height: 1.5; }
 button, input, select { font: inherit; }
@@ -113,6 +116,7 @@ input[aria-invalid="true"] { border-color: #c73333; }
 .access-status.verify { color: #9a5b02; background: #fff1d7; }
 .access-status.action { color: #165d91; background: #e9f5ff; }
 .access-status.fits { color: var(--green); background: var(--green-soft); }
+.access-status.not-fit { color: var(--red); background: var(--red-soft); }
 .route-main { display: grid; grid-template-columns: 1fr 1.4fr 1fr .8fr; align-items: center; gap: 20px; }
 .time strong, .price strong { display: block; font-size: 27px; letter-spacing: -.04em; }
 .time span, .price span { display: block; font-size: 13px; font-weight: 700; }
@@ -129,6 +133,9 @@ input[aria-invalid="true"] { border-color: #c73333; }
 .weakest > span { display: grid; flex: 0 0 28px; height: 28px; place-items: center; color: #fff; background: var(--orange); border-radius: 50%; font-weight: 900; }
 .weakest strong { color: var(--orange); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .weakest p { margin: 1px 0 0; font-size: 13px; }
+.weakest.is-ok { background: var(--green-soft); }
+.weakest.is-ok > span { background: var(--green); }
+.weakest.is-ok strong { color: var(--green); }
 details { border-bottom: 1px solid var(--line); }
 summary { display: flex; justify-content: space-between; padding: 16px 0; font-size: 12px; font-weight: 800; cursor: pointer; list-style: none; }
 summary::-webkit-details-marker { display: none; }
@@ -140,6 +147,7 @@ summary::-webkit-details-marker { display: none; }
 .evidence-unknown { background: #d98b18; }
 .evidence-action { background: var(--blue); }
 .evidence-demo { background: #8b8b8b; }
+.evidence-missing { background: var(--red); }
 .evidence-list em, .evidence-list strong, .evidence-list small, .evidence-list a { display: block; }
 .evidence-list em { margin-bottom: 2px; color: var(--muted); font-size: 8px; font-style: normal; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .evidence-list strong { font-size: 11px; }
