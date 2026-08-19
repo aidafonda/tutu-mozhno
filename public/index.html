@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Туту.Можно проверяет, подходит ли вся поездка требованиям человека, и показывает слабое звено до покупки билета.">
+  <meta name="description" content="Туту.Можно сравнивает проверяемые условия поездки, показывает цену компромисса и дорожную карту инклюзивной экосистемы.">
   <title>Туту.Можно — билет есть, а добраться получится?</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -16,6 +16,7 @@
     </a>
     <nav aria-label="Основная навигация">
       <a href="#how">Как работает</a>
+      <a href="/inclusion">Инклюзивность</a>
       <a href="/docs">Документация</a>
     </nav>
     <div class="mcp-status" id="mcpStatus" role="status">
@@ -76,6 +77,22 @@
             <label class="choice" data-modes="plane,bus"><input type="checkbox" name="seatSelection"><span class="choice-icon">▦</span><span><strong>Можно выбрать место</strong><small>Проверим условия тарифа или схему автобуса</small></span></label>
           </div>
         </fieldset>
+
+        <details class="inclusion-preview">
+          <summary><span><i aria-hidden="true">+</i><strong>Условия инклюзивной поездки</strong><small>Будущий слой продукта — пока не влияет на выдачу без надёжных данных</small></span><b>Развернуть</b></summary>
+          <div class="inclusion-intro"><strong>Не прячем боль за вечным «уточните».</strong><p>Текущий MCP хорошо описывает билеты и оснащение транспорта, но ещё не покрывает всю цепочку доступности. Эти условия появятся как активные фильтры только вместе с источниками, владельцами и сроком актуальности данных.</p></div>
+          <div class="inclusion-grid">
+            <article><span>↗</span><div><strong>Путь без ступеней</strong><small>Входы, лифты, пандусы, платформы и временные поломки</small></div></article>
+            <article><span>◆</span><div><strong>Сопровождение</strong><small>Доступность услуги, срок заявки и подтверждение выполнения</small></div></article>
+            <article><span>●</span><div><strong>Доступный санузел</strong><small>На объектах и в конкретном транспортном средстве</small></div></article>
+            <article><span>♿</span><div><strong>Посадка и место</strong><small>Подъёмник, аппарель, ширина прохода и место для кресла</small></div></article>
+            <article><span>♙</span><div><strong>Детская коляска</strong><small>Проходимость пересадок и правила конкретного тарифа</small></div></article>
+            <article><span>◇</span><div><strong>Поездка с питомцем</strong><small>Переноска, документы и правила перевозчика</small></div></article>
+            <article><span>↔</span><div><strong>Расстояние и уклон</strong><small>Метры пешком, уклоны, покрытия и время доступной пересадки</small></div></article>
+            <article><span>◎</span><div><strong>Сенсорная навигация</strong><small>Тактильные пути, индукционные петли и визуальные объявления</small></div></article>
+          </div>
+          <div class="inclusion-footer"><p><strong>Первые данные уже есть:</strong> пилотный реестр двух вокзалов сохранён как доказательство подхода.</p><a href="/inclusion">Открыть дорожную карту экосистемы →</a></div>
+        </details>
 
         <div class="form-footer">
           <p><span aria-hidden="true">ⓘ</span> Сервис не ставит диагнозов и не сохраняет профиль здоровья.</p>

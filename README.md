@@ -15,6 +15,7 @@
 - Health-check: `/api/health`
 - Список обнаруженных инструментов MCP: `/api/mcp/tools`
 - Пилотный реестр доступности: `/api/accessibility/registry`
+- Дорожная карта инклюзивной экосистемы: `/inclusion`
 
 ## Проблема
 
@@ -154,6 +155,7 @@ Caddy автоматически получает TLS-сертификат. Ко
 
 User Stories, JTBD, метрики и rollout собраны в [docs/PRODUCT.md](docs/PRODUCT.md). Структура выступления — в [docs/PITCH.md](docs/PITCH.md).
 Результаты прогонов — в [docs/TEST_REPORT.md](docs/TEST_REPORT.md), требования для внедрения в инфраструктуру Туту — в [docs/TUTU_INTEGRATION.md](docs/TUTU_INTEGRATION.md).
+Отдельная модель данных и этапы инклюзивной экосистемы — в [docs/INCLUSION_ROADMAP.md](docs/INCLUSION_ROADMAP.md) и на странице `/inclusion`.
 
 ## Лицензия
 

@@ -44,6 +44,7 @@ const server = createServer(async (request, response) => {
             searchedAt: new Date().toISOString(),
             context,
             decision: buildDecisionSupport(routes),
+            inclusion: inclusionRoadmapSummary(),
             routes: routes.map(publicRoute)
           });
         }
@@ -76,6 +77,7 @@ const server = createServer(async (request, response) => {
           warning: "Туту MCP сейчас недоступен или формат ответа ещё не поддержан. Эти результаты не являются реальными предложениями.",
           diagnostic: process.env.NODE_ENV === "production" ? undefined : error.message,
           decision: buildDecisionSupport(demoRoutes),
+          inclusion: inclusionRoadmapSummary(),
           routes: demoRoutes
         });
       }
@@ -124,6 +126,24 @@ function publicRoute(route) {
   return safeRoute;
 }
 
+function inclusionRoadmapSummary() {
+  return {
+    status: "data_gap",
+    affectsRecommendation: false,
+    message: "Текущий MCP Туту хорошо описывает билеты и часть оснащения транспорта, но пока не содержит достаточных сквозных данных, чтобы автоматически гарантировать доступность вокзалов, пересадок, посадки и последней мили.",
+    pilotFacilities: publicRegistry().facilities.length,
+    missingData: [
+      "безбарьерные входы и лифты",
+      "доступная посадка и места",
+      "оперативные поломки",
+      "расстояния и уклоны",
+      "сопровождение и SLA",
+      "доступная последняя миля"
+    ],
+    roadmapUrl: "/inclusion"
+  };
+}
+
 async function health() {
   return {
     status: "ok",
@@ -135,7 +155,7 @@ async function health() {
 
 async function serveStatic(rawUrl, response) {
   const pathname = decodeURIComponent((rawUrl || "/").split("?")[0]);
-  const route = pathname === "/" ? "/index.html" : pathname === "/docs" ? "/docs.html" : pathname === "/registry" ? "/registry.html" : pathname;
+  const route = pathname === "/" ? "/index.html" : pathname === "/docs" ? "/docs.html" : pathname === "/registry" ? "/registry.html" : pathname === "/inclusion" ? "/inclusion.html" : pathname;
   const safePath = normalize(route).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(PUBLIC_DIR, safePath);
   if (!filePath.startsWith(PUBLIC_DIR)) return json(response, 403, { error: "Forbidden" });

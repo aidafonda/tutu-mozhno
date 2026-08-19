@@ -90,7 +90,19 @@ function renderResults(data, payload) {
       <div class="source-badge"><span></span>Обновлено ${formatSearchTime(data.searchedAt)}</div>
     </div>
     ${data.decision ? decisionPanel(data.decision, data.routes) : ""}
+    ${data.inclusion ? inclusionResultPanel(data.inclusion, from, to) : ""}
     <div class="route-list">${data.routes.map((route, index) => routeCard(route, index, data.routes.length)).join("")}</div>`;
+}
+
+function inclusionResultPanel(inclusion, from, to) {
+  return `<details class="result-inclusion">
+    <summary><span><i aria-hidden="true">♿</i><strong>Инклюзивность маршрута ${escapeHtml(from)} → ${escapeHtml(to)}</strong><small>Почему мы пока не включаем неподтверждаемые условия в зелёный статус</small></span><b>Прочитать</b></summary>
+    <div class="result-inclusion-body"><p><strong>Это ограничение доступных данных, а не пользователя.</strong> ${escapeHtml(inclusion.message)}</p>
+      <div>${(inclusion.missingData || []).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+      <p>Пилотный доказательный реестр: ${inclusion.pilotFacilities} объекта. Для промышленного запуска нужен единый контур данных вокзалов, аэропортов, остановок, перевозчиков и оперативных событий.</p>
+      <a href="/inclusion">Посмотреть архитектуру и дорожную карту →</a>
+    </div>
+  </details>`;
 }
 
 function decisionPanel(decision, routes) {

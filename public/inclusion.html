@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Дорожная карта экосистемы инклюзивных путешествий Туту.Можно.">
+  <title>Экосистема инклюзивных путешествий — Туту.Можно</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .roadmap{width:min(100% - 40px,1100px);margin:70px auto 110px}.roadmap-hero{max-width:900px}.roadmap h1{font-size:clamp(46px,7vw,82px);text-align:left;line-height:.98}.roadmap-lead{max-width:790px;color:var(--muted);font-size:19px}.boundary{margin:32px 0;padding:22px;color:#fff;background:linear-gradient(135deg,var(--navy),#3020ad);border-radius:18px}.boundary p{margin:6px 0 0;color:#d8d4ff}.vision{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:34px 0 70px}.vision article,.data-layer,.phase,.principle{padding:22px;background:#fff;border:1px solid var(--line);border-radius:16px}.vision span,.phase span{display:grid;width:34px;height:34px;place-items:center;color:#fff;background:var(--violet);border-radius:9px;font-size:11px;font-weight:900}.vision h2{margin:18px 0 7px;font-size:18px}.vision p,.data-layer p,.phase p,.principle p{margin:0;color:var(--muted);font-size:12px}.roadmap-section{margin-top:70px}.roadmap-section>h2{margin:0 0 10px;font-size:34px;letter-spacing:-.04em}.section-lead{max-width:760px;margin:0 0 24px;color:var(--muted)}.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.data-layer{position:relative;padding-left:72px}.data-layer>span{position:absolute;left:22px;top:22px;display:grid;width:34px;height:34px;place-items:center;color:var(--violet-dark);background:var(--violet-soft);border-radius:9px}.data-layer h3{margin:0 0 9px}.data-layer ul{margin:12px 0 0;padding-left:18px;color:#555c68;font-size:11px}.data-layer li+li{margin-top:5px}.architecture{display:grid;grid-template-columns:repeat(5,1fr);align-items:center;gap:8px;margin-top:24px}.architecture div{padding:16px;text-align:center;background:var(--violet-soft);border-radius:12px;font-size:11px;font-weight:800}.architecture i{text-align:center;color:var(--violet);font-style:normal}.phases{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.phase h3{margin:16px 0 7px;font-size:15px}.phase small{color:var(--violet-dark);font-weight:800}.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.principle h3{margin-top:0}.roadmap-cta{display:flex;align-items:center;justify-content:space-between;gap:30px;margin-top:70px;padding:28px;background:var(--green-soft);border-radius:18px}.roadmap-cta h2{margin:0 0 5px}.roadmap-cta p{margin:0;color:#366659}.roadmap-cta a{padding:14px 18px;color:#fff;background:var(--violet);border-radius:12px;font-weight:800;text-decoration:none;white-space:nowrap}@media(max-width:800px){.vision,.data-grid,.phases,.principles{grid-template-columns:1fr}.architecture{grid-template-columns:1fr}.architecture i{transform:rotate(90deg)}.roadmap-cta{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">Перейти к дорожной карте</a>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-word" aria-hidden="true">tutu</span><span class="brand-product">можно</span></a>
+    <nav aria-label="Основная навигация"><a href="/">Найти маршрут</a><a href="/registry">Пилотный реестр</a><a href="/docs">Документация</a></nav>
+  </header>
+  <main class="roadmap" id="content">
+    <section class="roadmap-hero">
+      <p class="eyebrow">За пределами хакатонного MVP</p>
+      <h1>Единая экосистема инклюзивных путешествий</h1>
+      <p class="roadmap-lead">Цель — соединить билет, транспорт, инфраструктуру, сопровождение и последнюю милю в один доказательный маршрут, который учитывает реальные возможности человека.</p>
+    </section>
+    <div class="boundary"><strong>Честная граница текущей версии</strong><p>MCP подтверждает коммерческие предложения и часть оснащения транспорта, но не описывает доступность всей цепочки. Поэтому инклюзивные условия показаны как roadmap и не влияют на зелёный статус до появления достаточных данных.</p></div>
+    <section class="vision" aria-label="Видение продукта">
+      <article><span>01</span><h2>Один профиль требований</h2><p>Не диагноз, а практические условия: ступени, расстояние, посадка, санузел, сопровождение и способ получения информации.</p></article>
+      <article><span>02</span><h2>Один сквозной маршрут</h2><p>Дом → вокзал → платформа → транспорт → пересадка → последняя миля, а не изолированная карточка билета.</p></article>
+      <article><span>03</span><h2>Одно доказательство</h2><p>У каждого вывода есть источник, владелец, дата проверки, TTL и понятный процесс исправления.</p></article>
+    </section>
+
+    <section class="roadmap-section">
+      <h2>Какие данные нужно собрать</h2>
+      <p class="section-lead">Минимальная модель должна связываться с существующими geo-, station-, carrier- и offer-ID Туту.</p>
+      <div class="data-grid">
+        <article class="data-layer"><span>⌂</span><h3>Вокзалы, аэропорты и остановки</h3><p>Физическая доступность объекта и отдельных зон.</p><ul><li>доступные входы, двери, турникеты и кассы;</li><li>лифты, пандусы, уклоны, покрытия и ширина проходов;</li><li>санузлы, комнаты отдыха, тактильные пути и индукционные петли;</li><li>доступ к каждой платформе, сектору и выходу.</li></ul></article>
+        <article class="data-layer"><span>↔</span><h3>Граф перемещений и пересадок</h3><p>Не наличие лифта, а реальный доступный путь между точками.</p><ul><li>метры, уклоны, ступени и тип покрытия каждого ребра;</li><li>доступное время пересадки для разных профилей;</li><li>альтернативный путь при закрытом лифте;</li><li>связь платформ, терминалов и городской последней мили.</li></ul></article>
+        <article class="data-layer"><span>▰</span><h3>Транспорт и перевозчики</h3><p>Оснащение конкретного рейса, вагона или борта.</p><ul><li>подъёмник, аппарель, высота посадки и помощь персонала;</li><li>места для кресла-коляски и параметры проходов;</li><li>доступный санузел, крепления и кнопка вызова;</li><li>правила колясок, животных-помощников и медицинского оборудования.</li></ul></article>
+        <article class="data-layer"><span>!</span><h3>Оперативное состояние</h3><p>Паспорт объекта недостаточен, если оборудование сломано сегодня.</p><ul><li>работоспособность лифтов, эскалаторов и подъёмников;</li><li>временные перекрытия и смена платформ;</li><li>замена транспортного средства;</li><li>подтверждение заявки сопровождения и SLA реакции.</li></ul></article>
+        <article class="data-layer"><span>◆</span><h3>Сервис сопровождения</h3><p>Помощь должна быть частью маршрута, а не телефонным номером в памятке.</p><ul><li>доступность по объекту и времени;</li><li>срок предварительной заявки;</li><li>статус: создана, подтверждена, назначен сотрудник, выполнена;</li><li>контакт и безопасный сценарий эскалации.</li></ul></article>
+        <article class="data-layer"><span>✓</span><h3>Доверие и обратная связь</h3><p>Данные должны обновляться и выдерживать аудит.</p><ul><li>владелец факта, первичный источник, дата и TTL;</li><li>уровень уверенности: подтверждено, частично, неизвестно;</li><li>сообщение пользователя о расхождении с реальностью;</li><li>модерация, история изменений и контроль false-safe.</li></ul></article>
+      </div>
+    </section>
+
+    <section class="roadmap-section">
+      <h2>Целевая архитектура</h2>
+      <p class="section-lead">Accessibility Knowledge Graph становится общим слоем между поставщиками данных, поиском Туту и пользовательскими каналами.</p>
+      <div class="architecture"><div>Паспорта объектов<br>и перевозчики</div><i>→</i><div>Единая схема<br>и нормализация</div><i>→</i><div>Граф доступности<br>с TTL и событиями</div></div>
+      <div class="architecture"><div>Профиль условий<br>пользователя</div><i>→</i><div>Проверка маршрута<br>и слабого звена</div><i>→</i><div>Web, приложение,<br>поддержка и MCP</div></div>
+    </section>
+
+    <section class="roadmap-section">
+      <h2>План внедрения</h2>
+      <div class="phases">
+        <article class="phase"><span>1</span><h3>Стандарт данных</h3><small>0–3 месяца</small><p>Единая схема, владельцы полей, идентификаторы Туту, методология и аудит источников.</p></article>
+        <article class="phase"><span>2</span><h3>Пилот коридора</h3><small>3–6 месяцев</small><p>Москва—Петербург: вокзалы, несколько поездов, сопровождение и проверка с профильными организациями.</p></article>
+        <article class="phase"><span>3</span><h3>Оперативный контур</h3><small>6–12 месяцев</small><p>Поломки оборудования, статусы заявок, обратная связь и интеграция в поиск Туту.</p></article>
+        <article class="phase"><span>4</span><h3>Мультимодальность</h3><small>12+ месяцев</small><p>Авиа, автобусы, городской транспорт, отели и доступная последняя миля.</p></article>
+      </div>
+    </section>
+
+    <section class="roadmap-section">
+      <h2>Принципы безопасного запуска</h2>
+      <div class="principles">
+        <article class="principle"><h3>Не диагноз</h3><p>Храним только функциональные требования поездки и минимизируем чувствительные данные.</p></article>
+        <article class="principle"><h3>Не процент</h3><p>Одно критичное неизвестное важнее среднего рейтинга доступности.</p></article>
+        <article class="principle"><h3>Не вечный факт</h3><p>Каждое подтверждение имеет TTL; оперативное событие может временно отменить паспортную доступность.</p></article>
+      </div>
+    </section>
+
+    <section class="roadmap-cta"><div><h2>Хакатонный MVP — первый доказательный кирпич</h2><p>Пилотный реестр уже показывает, как связывать вывод, официальный источник и дату проверки.</p></div><a href="/registry">Открыть пилотный реестр</a></section>
+  </main>
+  <footer><span>Туту.Можно · дорожная карта инклюзивной экосистемы</span><a href="/">Вернуться к поиску</a></footer>
+</body>
+</html>
