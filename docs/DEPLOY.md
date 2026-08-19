@@ -38,10 +38,12 @@ APP_DOMAIN=demo.example.com
 
 ```bash
 curl -fsS https://demo.example.com/api/health
+curl -fsS https://demo.example.com/api/live
+curl -fsS https://demo.example.com/api/ready
 curl -fsS https://demo.example.com/docs > /dev/null
 ```
 
-Затем выполнить поиск и проверить индикатор `MCP онлайн`. При demo fallback посмотреть `docker compose logs --tail=200 app`.
+Затем выполнить живой поиск и убедиться, что ответ имеет `mode: live`. При demo fallback посмотреть `docker compose logs --tail=200 app`.
 
 ## Обновление
 
@@ -54,8 +56,8 @@ docker compose up -d --build
 
 - [ ] Домен открывается с телефона по мобильной сети.
 - [ ] `/api/health` отвечает `status: ok`.
-- [ ] Индикатор показывает живой MCP.
-- [ ] Москва → Казань работает два раза подряд.
+- [ ] `/api/ready` отвечает `status: ready`, `mcp: available`.
+- [ ] Москва → Санкт-Петербург работает два раза подряд.
 - [ ] `/docs` доступна без авторизации.
 - [ ] Репозиторий публичный и клонируется.
 - [ ] В README стоят публичные ссылки.

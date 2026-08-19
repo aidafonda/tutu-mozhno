@@ -1,6 +1,8 @@
 import { findFacility } from "./accessibility-registry.mjs";
 
-export function validateSearchInput(input = {}) {
+export function validateSearchInput(input = {}, { today = new Date().toISOString().slice(0, 10), maxAdvanceDays = 365 } = {}) {
+  const adults = Math.max(1, Math.min(5, Number(input.adults || input.passengers || 1)));
+  const children = Boolean(input.withChild) ? Math.max(1, Math.min(4, Number(input.children || 1))) : 0;
   const clean = {
     from: String(input.from || "").trim(),
     to: String(input.to || "").trim(),
@@ -13,12 +15,16 @@ export function validateSearchInput(input = {}) {
     withChild: Boolean(input.withChild),
     withPet: Boolean(input.withPet),
     heavyLuggage: Boolean(input.heavyLuggage),
-    passengers: Math.max(1, Math.min(5, Number(input.passengers || 1)))
+    adults,
+    children,
+    passengers: Math.min(5, adults + children)
   };
   const errors = {};
   if (clean.from.length < 2) errors.from = "Укажите город отправления";
   if (clean.to.length < 2) errors.to = "Укажите город назначения";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean.date)) errors.date = "Выберите дату";
+  if (!isIsoDate(clean.date)) errors.date = "Выберите корректную дату";
+  else if (clean.date < today) errors.date = "Дата поездки уже прошла";
+  else if (clean.date > addDays(today, maxAdvanceDays)) errors.date = "Выберите дату не дальше чем через год";
   if (clean.from.toLowerCase() === clean.to.toLowerCase()) errors.to = "Города должны отличаться";
   return { value: clean, errors, valid: Object.keys(errors).length === 0 };
 }
@@ -112,15 +118,35 @@ function buildRequirementChecks(route, input) {
     const confirmedFacilities = [origin, destination].filter((facility) => facility?.facts.accessibleToilet?.status === "confirmed");
     const vehicleNote = route.vehicleFacts?.hasBioToilet
       ? "В вагоне есть биотуалет, но MCP не подтверждает, что он доступен для кресла-коляски."
-      : "Доступность санузла в транспорте не подтверждена.";
+      : route.vehicleFacts?.hasToilet
+        ? "В автобусе указан туалет, но его доступность для кресла-коляски не подтверждена."
+        : "Доступность санузла в транспорте не подтверждена.";
     checks.push(confirmedFacilities.length
       ? evidence("Доступный санузел", "partial", `Подтверждён на ${confirmedFacilities.map((item) => item.name).join(" и ")}. ${vehicleNote}`, sourceFor(confirmedFacilities[0]), "Уточнить доступный санузел в выбранном вагоне")
       : evidence("Доступный санузел", "unknown", vehicleNote, null, "Уточнить санузел у перевозчика"));
   }
 
-  if (input.withChild) checks.push(evidence("Ребёнок и коляска", "unknown", route.changes ? "Есть пересадка; путь с коляской и время на переход не подтверждены." : "Маршрут прямой, но правила провоза коляски не представлены в MCP.", null, "Проверить детский тариф и правила провоза коляски"));
+  if (input.withChild) {
+    const childIncluded = Number(route.offerFacts?.passengersChild || 0) > 0;
+    checks.push(evidence("Ребёнок и коляска", childIncluded ? "partial" : "unknown", route.changes
+      ? `${childIncluded ? "Ребёнок учтён в поиске. " : ""}Есть пересадка; путь с коляской и время на переход не подтверждены.`
+      : childIncluded
+        ? "Ребёнок учтён в поиске, но правила провоза коляски в предложении не указаны."
+        : "Маршрут прямой, но детский тариф и правила провоза коляски не подтверждены.", null, "Проверить детский тариф и правила провоза коляски"));
+  }
   if (input.withPet) checks.push(evidence("Поездка с питомцем", "unknown", "В проверенных данных MCP нет подтверждения правил для питомца по выбранному тарифу.", null, "Проверить переноску, документы и правила тарифа"));
-  if (input.heavyLuggage) checks.push(evidence("Тяжёлый багаж", route.changes ? "unknown" : "partial", route.changes ? "Пересадка потребует переноса багажа; доступный переход не подтверждён." : "Пересадок нет, но помощь с багажом и допустимая норма требуют подтверждения.", null, "Проверить норму багажа и заказать помощь при необходимости"));
+  if (input.heavyLuggage) {
+    const baggage = route.offerFacts?.checkedBaggage;
+    const busLuggage = route.vehicleFacts?.luggageCompartment || route.vehicleFacts?.luggageAvailable;
+    const baggageNote = baggage
+      ? `В одном из вариантов тарифа указан сдаваемый багаж${baggage.kg ? ` до ${baggage.kg} кг` : ""}${baggage.pieces ? `, мест: ${baggage.pieces}` : ""}; итоговая цена зависит от выбранного тарифа.`
+      : busLuggage
+        ? "В деталях автобуса указана возможность провоза багажа, но помощь с ним не подтверждена."
+        : "Пересадок нет, но помощь с багажом и допустимая норма требуют подтверждения.";
+    checks.push(evidence("Тяжёлый багаж", route.changes ? "unknown" : (baggage || busLuggage) ? "partial" : "unknown", route.changes
+      ? "Пересадка потребует переноса багажа; доступный переход не подтверждён."
+      : baggageNote, null, "Выбрать подходящий тариф и заказать помощь при необходимости"));
+  }
   if (Number(input.maxWalk) < 1000) checks.push(evidence(`Не более ${input.maxWalk} м пешком`, "unknown", "MCP и реестр не содержат полной длины пути внутри объектов и на пересадках.", null, "Уточнить расстояния внутри вокзала или аэропорта"));
 
   return checks;
@@ -138,32 +164,42 @@ export async function enrichRoutes(routes, input, mcp) {
   const enriched = await Promise.all(routes.map(async (route) => {
     let details = null;
     const isRail = ["rail", "railway"].includes(route.productType);
-    if (isRail && route.detailsRef) {
+    const isBus = route.productType === "bus";
+    if ((isRail || isBus) && route.detailsRef) {
       try {
-        details = await mcp.getOfferDetails("rail", route.detailsRef);
+        details = await mcp.getOfferDetails(isRail ? "rail" : "bus", route.detailsRef);
       } catch {
         details = null;
       }
     }
-    const vehicleFacts = extractVehicleFacts(details);
-    const vehicleEvidence = !isRail ? [] : vehicleFacts.detailsChecked ? [
-      evidence("Оснащение вагона", "confirmed", vehicleFacts.amenities.length
-        ? `Проверены детали класса обслуживания: ${vehicleFacts.hasBioToilet ? "биотуалет есть; " : ""}${vehicleFacts.hasAirConditioning ? "кондиционер есть" : "состав удобств ограничен"}.`
-        : "Детали класса обслуживания получены, но список удобств пуст.")
-    ] : [evidence("Оснащение вагона", "unknown", "Детали выбранного предложения получить не удалось.")];
+    const vehicleFacts = extractVehicleFacts(details, route.productType);
+    const vehicleEvidence = !(isRail || isBus) ? [] : vehicleFacts.detailsChecked ? [
+      evidence(isRail ? "Оснащение вагона" : "Оснащение автобуса", "confirmed", vehicleFacts.amenities.length
+        ? isRail
+          ? `Проверены детали класса обслуживания: ${vehicleFacts.hasBioToilet ? "биотуалет есть; " : ""}${vehicleFacts.hasAirConditioning ? "кондиционер есть" : "состав удобств ограничен"}.`
+          : `Проверены детали рейса: ${vehicleFacts.hasToilet ? "туалет указан; " : ""}${vehicleFacts.luggageCompartment ? "багажное отделение указано" : "состав удобств ограничен"}.`
+        : "Детали предложения получены, но список удобств пуст.")
+    ] : [evidence(isRail ? "Оснащение вагона" : "Оснащение автобуса", "unknown", "Детали выбранного предложения получить не удалось.")];
     return assessRoute({ ...route, baseEvidence: [...(route.baseEvidence || []), ...vehicleEvidence], vehicleFacts }, input);
   }));
   return enriched.sort((left, right) => routeRiskScore(left) - routeRiskScore(right) || left.durationMinutes - right.durationMinutes);
 }
 
-function extractVehicleFacts(details) {
-  if (!details) return { detailsChecked: false, amenities: [], hasBioToilet: false };
-  const amenities = unique((details.service_classes || []).flatMap((item) => item.amenities || []).map((item) => item.code).filter(Boolean));
+function extractVehicleFacts(details, productType) {
+  if (!details) return { detailsChecked: false, amenities: [], hasBioToilet: false, hasToilet: false, luggageCompartment: false, luggageAvailable: false };
+  const rawAmenities = productType === "bus"
+    ? (details.amenities || [])
+    : (details.service_classes || []).flatMap((item) => item.amenities || []);
+  const enabledAmenities = rawAmenities.filter((item) => item.enabled !== false);
+  const amenities = unique(enabledAmenities.map((item) => String(item.code || item.name || "").toUpperCase()).filter(Boolean));
   return {
     detailsChecked: true,
     amenities,
     hasBioToilet: amenities.includes("BIO_TOILET"),
-    hasAirConditioning: amenities.includes("AIR_CONDITIONING")
+    hasAirConditioning: amenities.includes("AIR_CONDITIONING") || amenities.includes("CONDITIONER"),
+    hasToilet: amenities.includes("TOILET"),
+    luggageCompartment: amenities.includes("LUGGAGE_COMPARTMENT"),
+    luggageAvailable: Boolean(details.luggage?.available ?? details.luggage?.included ?? details.luggage)
   };
 }
 
@@ -190,24 +226,7 @@ export function normalizeMcpResult(mcpResponse, input) {
   if (exactOffers.length) {
     return exactOffers.slice(0, 6).map((offer, index) => normalizeTutuOffer(offer, input, mcpResponse.tool, index));
   }
-  const candidates = flattenObjects(objects).filter(looksLikeOffer).slice(0, 6);
-  return candidates.map((offer, index) => assessRoute({
-    id: `mcp-${index}`,
-    source: "mcp",
-    productType: input.mode === "plane" ? "avia" : input.mode === "bus" ? "bus" : input.mode === "train" ? "railway" : "unknown",
-    transport: labelForMode(input.mode),
-    from: input.from,
-    to: input.to,
-    departure: firstValue(offer, ["departure", "departureTime", "departure_time", "startTime", "start_time"]),
-    arrival: firstValue(offer, ["arrival", "arrivalTime", "arrival_time", "endTime", "end_time"]),
-    durationMinutes: Number(firstValue(offer, ["durationMinutes", "duration_minutes", "duration"]) || 0),
-    price: Number(firstValue(offer, ["price", "amount", "minPrice", "min_price", "cost"]) || 0),
-    changes: Number(firstValue(offer, ["changes", "transfers", "stops"]) || 0),
-    bookingUrl: findUrl(offer) || "https://www.tutu.ru/",
-    evidence: [
-      { label: "Предложение транспорта", state: "confirmed", note: "Подтверждено данными Туту" }
-    ]
-  }, input));
+  return [];
 }
 
 export function extractMcpContext(mcpResponse, input) {
@@ -217,11 +236,12 @@ export function extractMcpContext(mcpResponse, input) {
     try {
       const payload = JSON.parse(item.text);
       const meta = payload.meta || {};
+      const offerCount = (payload.offers?.length || 0) + (payload.variants?.length || 0);
       return {
-        resolvedFrom: meta.from?.name || input.from,
-        resolvedTo: meta.to?.name || input.to,
-        fromRegion: meta.from?.region || null,
-        toRegion: meta.to?.region || null,
+        resolvedFrom: offerCount ? meta.from?.name || input.from : input.from,
+        resolvedTo: offerCount ? meta.to?.name || input.to : input.to,
+        fromRegion: offerCount ? meta.from?.region || null : null,
+        toRegion: offerCount ? meta.to?.region || null : null,
         unavailable: meta.unavailable || [],
         totalMatched: meta.total_matched ?? payload.offers?.length ?? payload.variants?.length ?? 0,
         hasMore: Boolean(meta.has_more)
@@ -258,6 +278,7 @@ function normalizeTutuOffer(offer, input, tool, index) {
     bookingUrl: preferredBookingUrl(offer),
     searchResultsUrl: offer.search_results_url,
     detailsRef: offer.details_ref || null,
+    offerFacts: extractOfferFacts(offer),
     evidence: [
       { label: "Билет и расписание", state: "confirmed", note: "Подтверждено данными Туту" },
       { label: "Станции", state: "confirmed", note: `${offer.legs?.[0]?.from || segment.from || input.from} → ${lastLeg?.to || lastSegment.to || input.to}` },
@@ -266,6 +287,24 @@ function normalizeTutuOffer(offer, input, tool, index) {
     ]
   };
   return assessRoute(route, input);
+}
+
+function extractOfferFacts(offer) {
+  const variants = Array.isArray(offer.variants) ? offer.variants : [];
+  const baggageOptions = variants
+    .map((variant) => variant?.conditions?.baggage)
+    .filter(Boolean);
+  const checkedBaggage = baggageOptions.find((item) => Number(item.pieces || 0) > 0 || Number(item.kg || item.weight_kg || 0) > 0) || null;
+  const passengerRef = offer.checkout_ref || offer.details_ref || {};
+  return {
+    passengersAdult: Number(passengerRef.passengers_full ?? passengerRef.adults ?? 0),
+    passengersChild: Number(passengerRef.passengers_child ?? passengerRef.children ?? 0),
+    seatSelectionAvailable: variants.some((variant) => variant?.conditions?.seat_selection === true),
+    checkedBaggage: checkedBaggage ? {
+      pieces: Number(checkedBaggage.pieces || 0),
+      kg: Number(checkedBaggage.kg || checkedBaggage.weight_kg || 0)
+    } : null
+  };
 }
 
 function preferredBookingUrl(offer) {
@@ -293,35 +332,16 @@ function offerLabel(offer, input, trainName, voyageNumber) {
   return labelForMode(input.mode);
 }
 
-function flattenObjects(value, result = []) {
-  if (Array.isArray(value)) value.forEach((item) => flattenObjects(item, result));
-  else if (value && typeof value === "object") {
-    result.push(value);
-    Object.values(value).forEach((item) => flattenObjects(item, result));
-  }
-  return result;
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function looksLikeOffer(object) {
-  const keys = Object.keys(object).join(" ").toLowerCase();
-  return /(price|amount|cost|departure|arrival|offer|ticket)/.test(keys);
-}
-
-function firstValue(object, keys) {
-  for (const key of keys) if (object[key] !== undefined) return object[key];
-  return null;
-}
-
-function findUrl(value) {
-  if (!value || typeof value !== "object") return null;
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item === "string" && /url|link/i.test(key) && /^https?:\/\//.test(item)) return item;
-    if (item && typeof item === "object") {
-      const nested = findUrl(item);
-      if (nested) return nested;
-    }
-  }
-  return null;
+function addDays(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function labelForMode(mode) {

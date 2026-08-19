@@ -16,10 +16,24 @@ test("rejects an identical origin and destination", () => {
   assert.ok(result.errors.to);
 });
 
+test("rejects past, impossible and excessively distant dates on the server", () => {
+  const options = { today: "2026-08-19", maxAdvanceDays: 365 };
+  assert.match(validateSearchInput({ from: "Москва", to: "Казань", date: "2020-01-01" }, options).errors.date, /прошла/);
+  assert.match(validateSearchInput({ from: "Москва", to: "Казань", date: "2026-02-31" }, options).errors.date, /корректную/);
+  assert.match(validateSearchInput({ from: "Москва", to: "Казань", date: "2028-01-01" }, options).errors.date, /через год/);
+});
+
 test("builds arguments from a discovered MCP schema", () => {
   const schema = { properties: { departure_city: { type: "string" }, arrival_city: { type: "string" }, departure_date: { type: "string" }, adults: { type: "integer" } } };
   assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань", date: "2026-08-20", passengers: 2 }), {
     departure_city: "Москва", arrival_city: "Казань", departure_date: "2026-08-20", adults: 2
+  });
+});
+
+test("passes a child to MCP as a real passenger", () => {
+  const schema = { properties: { adults: { type: "integer" }, children: { type: "integer" }, passengers: { type: "integer" } } };
+  assert.deepEqual(buildToolArguments(schema, { adults: 1, children: 1, passengers: 2, withChild: true }), {
+    adults: 1, children: 1, passengers: 2
   });
 });
 
@@ -103,6 +117,46 @@ test("normalizes resolved city and live multitransport variants", () => {
   assert.equal(routes[0].bookingUrl, "https://avia.tutu.ru/example");
   assert.equal(context.resolvedTo, "Санкт-Петербург");
   assert.equal(context.unavailable[0].mode, "railway");
+});
+
+test("does not invent offers from MCP metadata", () => {
+  const payload = { meta: { total_matched: 0, from: { name: "Сен-Пьер", offer_hint: "none" }, price_stats: { min: 0 } } };
+  const response = { tool: "search_multitransport", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
+  assert.deepEqual(normalizeMcpResult(response, { from: "Абырвалг", to: "Москва", mode: "any", maxWalk: 300 }), []);
+  assert.equal(extractMcpContext(response, { from: "Абырвалг", to: "Москва" }).resolvedFrom, "Абырвалг");
+});
+
+test("uses avia passenger and baggage facts without overstating accessibility", async () => {
+  const payload = { variants: [{
+    offer_id: "avia-1", transport: "avia", duration_min: 120, segments_count: 1,
+    checkout_ref: { passengers_full: 1, passengers_child: 1 },
+    variants: [{ conditions: { baggage: { pieces: 1, kg: 23 }, seat_selection: true } }],
+    price: { amount: 10000 }, legs: [{ from: "Москва", to: "Сочи", segments: [] }]
+  }] };
+  const response = { tool: "search_avia", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
+  const [route] = await enrichRoutes(normalizeMcpResult(response, { from: "Москва", to: "Сочи", mode: "plane" }), {
+    withChild: true, heavyLuggage: true, maxWalk: 2000
+  }, { getOfferDetails: async () => null });
+  assert.equal(route.offerFacts.passengersChild, 1);
+  assert.equal(route.offerFacts.checkedBaggage.kg, 23);
+  assert.equal(route.accessibility.coverage.partial, 2);
+  assert.match(route.evidence.find((item) => item.label === "Тяжёлый багаж").note, /23 кг/);
+});
+
+test("enriches bus amenities but does not call a generic toilet accessible", async () => {
+  const [route] = await enrichRoutes([{
+    id: "bus-1", source: "mcp", productType: "bus", from: "Москва", to: "Тула", changes: 0,
+    durationMinutes: 180, detailsRef: { offer_id: "bus-1" }, evidence: []
+  }], { accessibleToilet: true, heavyLuggage: true, maxWalk: 2000 }, {
+    getOfferDetails: async (type) => {
+      assert.equal(type, "bus");
+      return { amenities: [{ code: "toilet", enabled: true }, { code: "luggage_compartment", enabled: true }] };
+    }
+  });
+  assert.equal(route.vehicleFacts.hasToilet, true);
+  assert.equal(route.vehicleFacts.luggageCompartment, true);
+  assert.equal(route.accessibility.status, "verify");
+  assert.match(route.evidence.find((item) => item.label === "Доступный санузел").note, /не подтверждена/);
 });
 
 test("matches an exact station from the official pilot registry", () => {

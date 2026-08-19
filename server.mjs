@@ -16,8 +16,14 @@ let lastMcpCheck = { ok: false, checkedAt: null, tools: [], error: "Ещё не 
 
 const server = createServer(async (request, response) => {
   const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
   try {
-    setSecurityHeaders(response);
+    setSecurityHeaders(response, requestId);
+    if (request.method === "GET" && request.url === "/api/live") return json(response, 200, { status: "ok", service: "tutu-mozhno" });
+    if (request.method === "GET" && request.url === "/api/ready") {
+      const ready = lastMcpCheck.ok || FALLBACK_MODE === "demo";
+      return json(response, ready ? 200 : 503, { status: ready ? "ready" : "not_ready", mcp: lastMcpCheck.ok ? "available" : "degraded", fallback: FALLBACK_MODE });
+    }
     if (request.method === "GET" && request.url === "/api/health") return json(response, 200, await health());
     if (request.method === "GET" && request.url === "/api/mcp/tools") return json(response, 200, await inspectMcp());
     if (request.method === "GET" && request.url === "/api/accessibility/registry") return json(response, 200, publicRegistry());
@@ -75,8 +81,9 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET") return serveStatic(request.url, response);
     json(response, 405, { error: "Method not allowed" });
   } catch (error) {
-    console.error(JSON.stringify({ path: request.url, message: error.message, durationMs: Date.now() - startedAt }));
-    json(response, 500, { error: "Внутренняя ошибка", requestId: crypto.randomUUID() });
+    const status = Number(error.statusCode || 500);
+    console.error(JSON.stringify({ requestId, path: request.url, message: error.message, durationMs: Date.now() - startedAt }));
+    json(response, status, { error: status === 400 ? "Некорректный JSON" : status === 413 ? "Запрос слишком большой" : "Внутренняя ошибка", requestId });
   }
 });
 
@@ -84,6 +91,10 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`Туту.Можно запущен: http://localhost:${PORT}`);
   inspectMcp().catch(() => {});
 });
+
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => server.close(() => process.exit(0)));
+}
 
 async function inspectMcp() {
   try {
@@ -142,10 +153,14 @@ async function readJsonBody(request) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 100_000) throw new Error("Request body too large");
+    if (size > 100_000) throw Object.assign(new Error("Request body too large"), { statusCode: 413 });
     chunks.push(chunk);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw Object.assign(new Error("Invalid JSON"), { statusCode: 400 });
+  }
 }
 
 function json(response, status, payload) {
@@ -153,11 +168,13 @@ function json(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function setSecurityHeaders(response) {
+function setSecurityHeaders(response, requestId) {
+  response.setHeader("X-Request-Id", requestId);
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 }
 
 function mimeType(path) {

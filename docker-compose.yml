@@ -1,7 +1,15 @@
 services:
   app:
     build: .
+    init: true
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -10,7 +18,7 @@ services:
     expose:
       - "3000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/live"]
       interval: 20s
       timeout: 5s
       retries: 3
