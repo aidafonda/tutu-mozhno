@@ -89,7 +89,21 @@ function renderResults(data, payload) {
       <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Проверенные предложения"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Сверили только выбранные условия, которые действительно доступны в данных.</p></div>
       <div class="source-badge"><span></span>Обновлено ${formatSearchTime(data.searchedAt)}</div>
     </div>
+    ${data.decision ? decisionPanel(data.decision, data.routes) : ""}
     <div class="route-list">${data.routes.map((route, index) => routeCard(route, index, data.routes.length)).join("")}</div>`;
+}
+
+function decisionPanel(decision, routes) {
+  return `<section class="decision-panel" aria-labelledby="decision-title">
+    <div class="decision-heading"><div><p class="eyebrow">Цена компромисса</p><h3 id="decision-title">Не просто отфильтровали — сравнили решения</h3></div><p>${decision.hasTradeoff ? "Показываем, что можно выиграть и каким условием придётся пожертвовать." : "Лучший вариант выигрывает без отказа от выбранных условий."}</p></div>
+    <div class="decision-grid">${decision.scenarios.map((scenario) => {
+      const routeIndex = routes.findIndex((route) => route.id === scenario.routeId);
+      const metric = scenario.type === "fastest" ? durationLabel(scenario.durationMinutes) : scenario.price ? `${number(scenario.price)} ₽` : "Цена в Туту";
+      return `<button class="decision-option ${scenario.status === "fits" ? "is-fit" : "has-tradeoff"}" type="button" data-route-index="${routeIndex}">
+        <span>${escapeHtml(scenario.title)}</span><strong>${escapeHtml(metric)}</strong><small>${escapeHtml(scenario.transport || "Маршрут")}</small><p>${escapeHtml(scenario.explanation)}</p><em>Показать предложение →</em>
+      </button>`;
+    }).join("")}</div>
+  </section>`;
 }
 
 function routeCard(route, index, total) {
@@ -101,7 +115,7 @@ function routeCard(route, index, total) {
     ? `${coverage.confirmed} из ${coverage.total} условий полностью подтверждено`
     : "Дополнительные условия не выбраны";
   return `
-    <article class="route-card ${index === 0 ? "recommended" : ""}">
+    <article class="route-card ${index === 0 ? "recommended" : ""}" id="route-card-${index}">
       <div class="route-top">
         <div><span class="transport">${escapeHtml(route.transport || "Маршрут")}</span>${index === 0 && total > 1 ? '<span class="best">Начать с этого</span>' : ""}</div>
         <span class="access-status ${status}"><i></i>${escapeHtml(route.accessibility?.label || "Нужно уточнить")}</span>
@@ -146,6 +160,14 @@ function renderEmpty(data, payload) {
 }
 
 resultContent.addEventListener("click", (event) => {
+  const scenario = event.target.closest("[data-route-index]");
+  if (scenario) {
+    const card = document.querySelector(`#route-card-${scenario.dataset.routeIndex}`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.classList.add("is-highlighted");
+    setTimeout(() => card?.classList.remove("is-highlighted"), 1400);
+    return;
+  }
   const button = event.target.closest("[data-plan]");
   if (!button) return;
   const actions = JSON.parse(button.dataset.plan || "[]");

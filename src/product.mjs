@@ -81,6 +81,7 @@ export function assessRoute(route, input) {
       label: status === "fits" ? (total ? "Все условия подтверждены" : "Маршрут найден") : status === "not-fit" ? "Не соответствует" : status === "action" ? "Нужно действие" : "Есть неизвестные условия",
       weakestLink: weakest?.note || (total ? "Все выбранные условия подтверждены данными предложения" : "Дополнительные условия не выбраны"),
       coverage: { confirmed, total, partial: partial.length, unknown: unknown.length, missing: missing.length, actions: requiredActions.length },
+      unmet: [...missing, ...unresolved, ...requiredActions].map((item) => item.label),
       risks: [...missing, ...unresolved].map((item) => item.note),
       actions: actions.length ? actions : ["Перед оплатой ещё раз проверьте актуальность условий у перевозчика"]
     }
@@ -148,7 +149,77 @@ export async function enrichRoutes(routes, input, mcp) {
     ] : [evidence(isRail ? "Оснащение вагона" : "Оснащение автобуса", "unknown", "Детали выбранного предложения получить не удалось.")];
     return assessRoute({ ...route, baseEvidence: [...(route.baseEvidence || []), ...vehicleEvidence], vehicleFacts }, input);
   }));
-  return enriched.sort((left, right) => routeRiskScore(left) - routeRiskScore(right) || left.durationMinutes - right.durationMinutes);
+  return enriched.sort((left, right) => routeRiskScore(left) - routeRiskScore(right) || comparablePrice(left) - comparablePrice(right) || left.durationMinutes - right.durationMinutes);
+}
+
+export function buildDecisionSupport(routes = []) {
+  if (!routes.length) return null;
+  const recommended = routes[0];
+  const fastest = [...routes].filter((route) => route.durationMinutes > 0).sort((left, right) => left.durationMinutes - right.durationMinutes)[0] || recommended;
+  const cheapest = [...routes].filter((route) => route.price > 0).sort((left, right) => left.price - right.price)[0] || recommended;
+  const scenarios = [
+    decisionScenario("recommended", "Лучшее совпадение", recommended, recommended),
+    decisionScenario("fastest", "Самый быстрый", fastest, recommended),
+    decisionScenario("cheapest", "Самый дешёвый", cheapest, recommended)
+  ];
+  return {
+    recommendedRouteId: recommended.id,
+    criteriaCount: recommended.accessibility?.coverage?.total || 0,
+    hasTradeoff: scenarios.some((scenario) => scenario.routeId !== recommended.id && scenario.unmet.length > 0),
+    scenarios
+  };
+}
+
+function decisionScenario(type, title, route, baseline) {
+  const unmet = route.accessibility?.unmet || [];
+  const priceDelta = Number(route.price || 0) - Number(baseline.price || 0);
+  const durationDelta = Number(route.durationMinutes || 0) - Number(baseline.durationMinutes || 0);
+  let explanation;
+  if (type === "recommended") {
+    explanation = route.accessibility?.status === "fits"
+      ? "Все выбранные условия выполнены. Это основной вариант для решения."
+      : `Ближе всего к запросу, но нужно проверить: ${unmet.join(", ") || "детали предложения"}.`;
+  } else if (route.id === baseline.id) {
+    explanation = type === "fastest"
+      ? "Лучшее совпадение одновременно является самым быстрым."
+      : "Лучшее совпадение одновременно является самым дешёвым.";
+  } else {
+    const deltas = [];
+    if (priceDelta < 0) deltas.push(`экономия ${formatRubles(Math.abs(priceDelta))}`);
+    if (priceDelta > 0) deltas.push(`дороже на ${formatRubles(priceDelta)}`);
+    if (durationDelta < 0) deltas.push(`быстрее на ${formatDuration(Math.abs(durationDelta))}`);
+    if (durationDelta > 0) deltas.push(`дольше на ${formatDuration(durationDelta)}`);
+    const cost = deltas.join(" · ") || "без разницы в цене и времени";
+    explanation = unmet.length ? `${cost}. Компромисс: ${unmet.join(", ")}.` : `${cost}. Все выбранные условия сохранены.`;
+  }
+  return {
+    type,
+    title,
+    routeId: route.id,
+    transport: route.transport,
+    price: route.price,
+    priceBasis: route.priceBasis,
+    durationMinutes: route.durationMinutes,
+    status: route.accessibility?.status,
+    unmet,
+    priceDelta,
+    durationDelta,
+    explanation
+  };
+}
+
+function comparablePrice(route) {
+  return route.price > 0 ? route.price : Number.MAX_SAFE_INTEGER;
+}
+
+function formatRubles(value) {
+  return `${new Intl.NumberFormat("ru-RU").format(Math.round(value))} ₽`;
+}
+
+function formatDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${hours ? `${hours} ч ` : ""}${rest ? `${rest} мин` : ""}`.trim();
 }
 
 function extractVehicleFacts(details, productType) {

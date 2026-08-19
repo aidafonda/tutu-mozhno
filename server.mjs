@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TutuMcpClient } from "./src/mcp-client.mjs";
-import { createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
+import { buildDecisionSupport, createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
 import { publicRegistry } from "./src/accessibility-registry.mjs";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
@@ -43,6 +43,7 @@ const server = createServer(async (request, response) => {
             tool: mcpResult.tool,
             searchedAt: new Date().toISOString(),
             context,
+            decision: buildDecisionSupport(routes),
             routes: routes.map(publicRoute)
           });
         }
@@ -67,13 +68,15 @@ const server = createServer(async (request, response) => {
           });
         }
         if (FALLBACK_MODE !== "demo") throw error;
+        const demoRoutes = createDemoRoutes(validation.value);
         return json(response, 200, {
           mode: "demo",
           source: "Демонстрационные данные",
           searchedAt: new Date().toISOString(),
           warning: "Туту MCP сейчас недоступен или формат ответа ещё не поддержан. Эти результаты не являются реальными предложениями.",
           diagnostic: process.env.NODE_ENV === "production" ? undefined : error.message,
-          routes: createDemoRoutes(validation.value)
+          decision: buildDecisionSupport(demoRoutes),
+          routes: demoRoutes
         });
       }
     }

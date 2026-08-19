@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildToolArguments, parseMcpResponse, rankSearchTools } from "../src/mcp-client.mjs";
-import { assessRoute, createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "../src/product.mjs";
+import { assessRoute, buildDecisionSupport, createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "../src/product.mjs";
 import { findFacility, publicRegistry } from "../src/accessibility-registry.mjs";
 
 test("validates a complete trip", () => {
@@ -74,6 +74,13 @@ test("does not mistake direct_only for destination", () => {
     origin: { type: "string" }, destination: { type: "string" }, direct_only: { type: "boolean" }
   } };
   assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань" }), {
+    origin: "Москва", destination: "Казань"
+  });
+});
+
+test("keeps transfer options available for an explicit tradeoff comparison", () => {
+  const schema = { properties: { origin: { type: "string" }, destination: { type: "string" }, direct_only: { type: "boolean" } } };
+  assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань", directOnly: true }), {
     origin: "Москва", destination: "Казань"
   });
 });
@@ -197,4 +204,24 @@ test("ranks a confirmed amenity above a confirmed mismatch", async () => {
   ], { onboardToilet: true }, { getOfferDetails: async (_type, ref) => ({ service_classes: [{ amenities: ref.id === "confirmed" ? [{ code: "BIO_TOILET" }] : [] }] }) });
   assert.equal(routes[0].id, "confirmed");
   assert.equal(routes[1].accessibility.status, "not-fit");
+});
+
+test("explains the price of a cheaper compromise", () => {
+  const decision = buildDecisionSupport([
+    { id: "match", transport: "Сапсан", price: 6000, durationMinutes: 240, accessibility: { status: "fits", coverage: { total: 2 }, unmet: [] } },
+    { id: "cheap", transport: "Поезд", price: 4000, durationMinutes: 480, accessibility: { status: "not-fit", coverage: { total: 2 }, unmet: ["Без пересадок"] } }
+  ]);
+  assert.equal(decision.recommendedRouteId, "match");
+  assert.equal(decision.hasTradeoff, true);
+  assert.equal(decision.scenarios[2].routeId, "cheap");
+  assert.match(decision.scenarios[2].explanation, /экономия 2[\s ]000 ₽/);
+  assert.match(decision.scenarios[2].explanation, /Без пересадок/);
+});
+
+test("states when the recommended route wins without a compromise", () => {
+  const route = { id: "winner", transport: "Сапсан", price: 5000, durationMinutes: 240, accessibility: { status: "fits", coverage: { total: 2 }, unmet: [] } };
+  const decision = buildDecisionSupport([route]);
+  assert.equal(decision.hasTradeoff, false);
+  assert.match(decision.scenarios[1].explanation, /одновременно является самым быстрым/);
+  assert.match(decision.scenarios[2].explanation, /одновременно является самым дешёвым/);
 });

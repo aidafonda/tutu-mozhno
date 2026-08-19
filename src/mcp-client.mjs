@@ -206,7 +206,6 @@ export function buildToolArguments(schema, input) {
     else if (matches(normalized, ["infants", "infant", "passengersinfant"])) value = 0;
     else if (matches(normalized, ["passengers", "passengercount", "travelers"])) value = input.passengers || input.adults || 1;
     else if (matches(normalized, ["transport", "mode", "transporttype"])) value = input.mode;
-    else if (matches(normalized, ["directonly"]) && input.directOnly) value = true;
     else if (property.type === "object") {
       const nested = buildToolArguments(property, input);
       if (Object.keys(nested).length) value = nested;
