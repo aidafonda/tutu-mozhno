@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Пилотный реестр официально проверенных данных доступности Туту.Можно.">
+  <title>Реестр доказательств — Туту.Можно</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .registry-page{width:min(100% - 40px,1000px);margin:64px auto 100px}.registry-page h1{max-width:850px;font-size:clamp(44px,7vw,76px);text-align:left}.registry-lead{max-width:760px;color:var(--muted);font-size:18px}.method{margin:28px 0;padding:20px;background:var(--violet-soft);border-left:4px solid var(--violet);border-radius:0 14px 14px 0}.facility-list{display:grid;gap:16px;margin-top:32px}.facility{padding:26px;background:#fff;border:1px solid var(--line);border-radius:20px}.facility-head{display:flex;justify-content:space-between;gap:20px}.facility h2{margin:0;font-size:25px}.facility-head p{margin:4px 0;color:var(--muted)}.registry-version{height:max-content;padding:7px 10px;color:var(--violet-dark);background:var(--violet-soft);border-radius:99px;font-size:10px;font-weight:900}.fact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px 0}.fact{padding:14px;background:#f8f7f4;border-radius:12px}.fact span{display:block;margin-bottom:5px;font-size:9px;font-weight:900;text-transform:uppercase}.fact strong{font-size:12px}.fact p{margin:5px 0 0;color:var(--muted);font-size:11px}.fact.confirmed span{color:var(--green)}.fact.partial span{color:var(--orange)}.fact.action span{color:var(--blue)}.source-link{color:var(--violet-dark);font-size:12px;font-weight:800}@media(max-width:640px){.registry-page{width:min(100% - 24px,1000px);margin-top:42px}.facility-head{flex-direction:column}.fact-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">Перейти к реестру</a>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-word" aria-hidden="true">tutu</span><span class="brand-product">можно</span></a>
+    <nav aria-label="Основная навигация"><a href="/">Найти маршрут</a><a href="/docs">Документация</a></nav>
+  </header>
+  <main class="registry-page" id="content">
+    <p class="eyebrow">Открытые доказательства</p>
+    <h1>Реестр доступности</h1>
+    <p class="registry-lead">Здесь собраны только сведения, вручную сверенные с официальными паспортами объектов. Это пилотное покрытие, а не база всех вокзалов России.</p>
+    <div class="method" id="method">Загружаем методологию…</div>
+    <div class="facility-list" id="facilityList" aria-live="polite"></div>
+  </main>
+  <footer><span>Туту.Можно · реестр доказательств</span><a href="/">Вернуться к поиску</a></footer>
+  <script type="module">
+    const labels={stepFree:"Путь без ступеней",accessibleToilet:"Доступный санузел",assistance:"Сопровождение",platforms:"Платформы"};
+    const states={confirmed:"Подтверждено",partial:"Частично",action:"Нужно действие",unknown:"Нет данных"};
+    const escape=(value="")=>String(value).replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
+    try {
+      const data=await fetch("/api/accessibility/registry").then((response)=>response.json());
+      document.querySelector("#method").innerHTML=`<strong>Методология.</strong> ${escape(data.methodology)} <small>Версия реестра: ${escape(data.version)}</small>`;
+      document.querySelector("#facilityList").innerHTML=data.facilities.map((facility)=>`<article class="facility"><div class="facility-head"><div><h2>${escape(facility.name)}</h2><p>${escape(facility.city)} · код станции ${escape(facility.stationCode)}</p></div><span class="registry-version">Проверено ${escape(facility.source.checkedAt)}</span></div><div class="fact-grid">${Object.entries(facility.facts).map(([key,fact])=>`<div class="fact ${escape(fact.status)}"><span>${escape(states[fact.status]||fact.status)}</span><strong>${escape(labels[key]||key)}</strong><p>${escape(fact.note)}</p></div>`).join("")}</div><a class="source-link" href="${escape(facility.source.url)}" target="_blank" rel="noreferrer">${escape(facility.source.publisher)} ↗</a></article>`).join("");
+    } catch {
+      document.querySelector("#method").textContent="Не удалось загрузить реестр.";
+    }
+  </script>
+</body>
+</html>

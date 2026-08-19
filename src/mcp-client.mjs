@@ -96,6 +96,16 @@ export class TutuMcpClient {
     return result;
   }
 
+  async getOfferDetails(productType, detailsRef) {
+    if (!detailsRef || typeof detailsRef !== "object") return null;
+    const result = await this.callTool("get_offer_details", {
+      product_type: productType,
+      details_ref: detailsRef,
+      view: "full"
+    });
+    return readToolJson(result);
+  }
+
   async search(input) {
     const tools = await this.listTools();
     const exactName = { train: "search_rail", plane: "search_avia", bus: "search_bus", any: "search_multitransport" }[input.mode];
@@ -139,6 +149,16 @@ export function parseMcpResponse(text) {
     .filter(Boolean)
     .map((line) => JSON.parse(line));
   return messages.find((message) => message.result || message.error) || messages.at(-1) || null;
+}
+
+export function readToolJson(result) {
+  const text = result?.content?.find((item) => item.type === "text" && typeof item.text === "string")?.text;
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 export function rankSearchTools(tools, mode = "train") {

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildToolArguments, parseMcpResponse, rankSearchTools } from "../src/mcp-client.mjs";
-import { createDemoRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "../src/product.mjs";
+import { assessRoute, createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "../src/product.mjs";
+import { findFacility, publicRegistry } from "../src/accessibility-registry.mjs";
 
 test("validates a complete trip", () => {
   const result = validateSearchInput({ from: "Москва", to: "Казань", date: "2026-08-20", mode: "train" });
@@ -102,4 +103,44 @@ test("normalizes resolved city and live multitransport variants", () => {
   assert.equal(routes[0].bookingUrl, "https://avia.tutu.ru/example");
   assert.equal(context.resolvedTo, "Санкт-Петербург");
   assert.equal(context.unavailable[0].mode, "railway");
+});
+
+test("matches an exact station from the official pilot registry", () => {
+  const station = findFacility("Москва — Ленинградский вокзал (2006004)", "rail_station");
+  assert.equal(station?.name, "Ленинградский вокзал");
+  assert.equal(station?.facts.stepFree.status, "partial");
+  assert.match(station?.source.url, /leningradsky\.dzvr\.ru/);
+  assert.equal(publicRegistry().facilities.length, 2);
+});
+
+test("never calls a route accessible while a selected condition is unknown", () => {
+  const route = assessRoute({
+    source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)",
+    to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, evidence: []
+  }, { stepFree: true, assistance: true, accessibleToilet: true, maxWalk: 300 });
+  assert.equal(route.accessibility.status, "verify");
+  assert.ok(route.accessibility.coverage.unknown > 0);
+  assert.match(route.accessibility.weakestLink, /частично доступ/i);
+  assert.ok(route.evidence.some((item) => item.source?.url));
+});
+
+test("enriches a rail offer with live vehicle details without treating a bio toilet as accessible", async () => {
+  const routes = await enrichRoutes([{
+    id: "1", source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)",
+    to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 240,
+    detailsRef: { offer_id: "1" }, evidence: []
+  }], { accessibleToilet: true, maxWalk: 300 }, {
+    getOfferDetails: async () => ({ service_classes: [{ amenities: [{ code: "BIO_TOILET" }, { code: "AIR_CONDITIONING" }] }] })
+  });
+  assert.equal(routes[0].vehicleFacts.hasBioToilet, true);
+  assert.equal(routes[0].accessibility.status, "verify");
+  assert.match(routes[0].accessibility.risks.join(" "), /не подтверждает/i);
+});
+
+test("ranks partial official evidence above completely unknown infrastructure", async () => {
+  const routes = await enrichRoutes([
+    { id: "unknown", source: "mcp", productType: "railway", from: "Москва — Восточный вокзал (2001025)", to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 220, evidence: [] },
+    { id: "partial", source: "mcp", productType: "railway", from: "Москва — Ленинградский вокзал (2006004)", to: "Санкт-Петербург — Московский вокзал (2004001)", changes: 0, durationMinutes: 250, evidence: [] }
+  ], { stepFree: true, maxWalk: 300 }, { getOfferDetails: async () => null });
+  assert.equal(routes[0].id, "partial");
 });

@@ -3,7 +3,8 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TutuMcpClient } from "./src/mcp-client.mjs";
-import { createDemoRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
+import { createDemoRoutes, enrichRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
+import { publicRegistry } from "./src/accessibility-registry.mjs";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT, "public");
@@ -19,6 +20,7 @@ const server = createServer(async (request, response) => {
     setSecurityHeaders(response);
     if (request.method === "GET" && request.url === "/api/health") return json(response, 200, await health());
     if (request.method === "GET" && request.url === "/api/mcp/tools") return json(response, 200, await inspectMcp());
+    if (request.method === "GET" && request.url === "/api/accessibility/registry") return json(response, 200, publicRegistry());
     if (request.method === "POST" && request.url === "/api/search") {
       const body = await readJsonBody(request);
       const validation = validateSearchInput(body);
@@ -26,16 +28,17 @@ const server = createServer(async (request, response) => {
 
       try {
         const mcpResult = await mcp.search(validation.value);
-        const routes = normalizeMcpResult(mcpResult, validation.value);
+        const routes = await enrichRoutes(normalizeMcpResult(mcpResult, validation.value), validation.value, mcp);
         const context = extractMcpContext(mcpResult, validation.value);
         if (routes.length) {
           return json(response, 200, {
             mode: "live",
-            source: "Данные Туту",
+            source: "Данные Туту и официальный реестр доступности",
             tool: mcpResult.tool,
             searchedAt: new Date().toISOString(),
             context,
-            routes
+            registry: { version: publicRegistry().version, facilities: publicRegistry().facilities.length },
+            routes: routes.map(publicRoute)
           });
         }
         return json(response, 200, {
@@ -103,6 +106,11 @@ function normalizeKnownCity(value) {
   return value;
 }
 
+function publicRoute(route) {
+  const { detailsRef, baseEvidence, ...safeRoute } = route;
+  return safeRoute;
+}
+
 async function health() {
   return {
     status: "ok",
@@ -114,7 +122,7 @@ async function health() {
 
 async function serveStatic(rawUrl, response) {
   const pathname = decodeURIComponent((rawUrl || "/").split("?")[0]);
-  const route = pathname === "/" ? "/index.html" : pathname === "/docs" ? "/docs.html" : pathname;
+  const route = pathname === "/" ? "/index.html" : pathname === "/docs" ? "/docs.html" : pathname === "/registry" ? "/registry.html" : pathname;
   const safePath = normalize(route).replace(/^(\.\.[/\\])+/, "");
   const filePath = join(PUBLIC_DIR, safePath);
   if (!filePath.startsWith(PUBLIC_DIR)) return json(response, 403, { error: "Forbidden" });

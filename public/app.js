@@ -87,8 +87,9 @@ function renderResults(data, payload) {
     ${demo ? `<div class="mode-banner" role="status"><strong>Демонстрационный режим.</strong> ${escapeHtml(data.warning)}</div>` : ""}
     ${corrections.length ? `<div class="correction-banner" role="status"><span>✓</span><div><strong>Уточнили направление</strong><p>${corrections.join(" · ")}</p></div></div>` : ""}
     ${unavailable.length ? `<div class="mode-banner"><strong>Учли ограничения маршрута.</strong> Не нашли варианты: ${escapeHtml(unavailable.join(", "))}. Показываем доступные виды транспорта.</div>` : ""}
+    ${data.registry ? `<div class="registry-banner"><span>Пилотный реестр</span><p>Инфраструктурные выводы основаны на ${data.registry.facilities} официальных паспортах объектов. Для остальных точек честно показываем «нет данных».</p><a href="/registry" target="_blank" rel="noreferrer">Открыть реестр ↗</a></div>` : ""}
     <div class="results-header">
-      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Подходящие варианты"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Сначала — самое важное ограничение и действие до оплаты.</p></div>
+      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Проверенные предложения"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Мы не называем маршрут доступным, пока каждое выбранное условие не подтверждено.</p></div>
       <div class="source-badge"><span></span>Обновлено ${formatSearchTime(data.searchedAt)}</div>
     </div>
     <div class="route-list">${data.routes.map((route, index) => routeCard(route, index, data.routes.length)).join("")}</div>`;
@@ -98,10 +99,14 @@ function routeCard(route, index, total) {
   const departure = formatDateTime(route.departure);
   const arrival = formatDateTime(route.arrival);
   const status = route.accessibility?.status || "verify";
+  const coverage = route.accessibility?.coverage || { confirmed: 0, total: 0, partial: 0, unknown: 0, actions: 0 };
+  const coverageText = coverage.total
+    ? `${coverage.confirmed} из ${coverage.total} условий полностью подтверждено`
+    : "Выбранные условия ещё не проверены";
   return `
     <article class="route-card ${index === 0 ? "recommended" : ""}">
       <div class="route-top">
-        <div><span class="transport">${escapeHtml(route.transport || "Маршрут")}</span>${index === 0 && total > 1 ? '<span class="best">Меньше сложностей</span>' : ""}</div>
+        <div><span class="transport">${escapeHtml(route.transport || "Маршрут")}</span>${index === 0 && total > 1 ? '<span class="best">Начать с этого</span>' : ""}</div>
         <span class="access-status ${status}"><i></i>${escapeHtml(route.accessibility?.label || "Нужно уточнить")}</span>
       </div>
       <div class="route-main">
@@ -110,10 +115,11 @@ function routeCard(route, index, total) {
         <div class="time"><strong>${arrival.time}</strong><span>${escapeHtml(route.to)}</span><small>${arrival.date}</small></div>
         <div class="price"><strong>${route.price ? `${number(route.price)} ₽` : "Цена в Туту"}</strong><span>за пассажира</span></div>
       </div>
+      <div class="coverage-line"><strong>${escapeHtml(coverageText)}</strong><span>${coverage.partial ? `Частично: ${coverage.partial} · ` : ""}${coverage.unknown ? `нет данных: ${coverage.unknown}` : "нет неизвестных условий"}${coverage.actions ? ` · обязательных действий: ${coverage.actions}` : ""}</span></div>
       <div class="weakest"><span aria-hidden="true">!</span><div><strong>Слабое звено</strong><p>${escapeHtml(route.accessibility?.weakestLink || "Требуется проверка")}</p></div></div>
       <details>
         <summary>Почему такой вывод <span>+</span></summary>
-        <div class="evidence-list">${(route.evidence || []).map((item) => `<div><i class="evidence-${item.state}"></i><span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.note)}</small></span></div>`).join("")}</div>
+        <div class="evidence-list">${(route.evidence || []).map(evidenceCard).join("")}</div>
       </details>
       <div class="route-actions">
         <span class="handoff-note">${handoffLabel(route)}</span>
@@ -121,6 +127,14 @@ function routeCard(route, index, total) {
         <a class="book-button" href="${safeUrl(route.bookingUrl)}" target="_blank" rel="noreferrer">${bookingLabel(route)} <span>→</span></a>
       </div>
     </article>`;
+}
+
+function evidenceCard(item) {
+  const source = item.source?.url
+    ? `<a href="${safeUrl(item.source.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.source.publisher || "Источник")}${item.source.checkedAt ? ` · проверено ${formatShortDate(item.source.checkedAt)}` : ""} ↗</a>`
+    : "";
+  const stateLabel = ({ confirmed: "Подтверждено", partial: "Частично", action: "Нужно действие", unknown: "Нет данных", demo: "Демо" })[item.state] || "Статус неизвестен";
+  return `<div class="evidence-card"><i class="evidence-${item.state}"></i><span><em>${stateLabel}</em><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.note)}</small>${source}</span></div>`;
 }
 
 function renderEmpty(data, payload) {
@@ -191,6 +205,7 @@ function handoffLabel(route) {
 function samePlace(left, right) { return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase(); }
 function modeLabel(mode) { return ({ railway: "поезда", rail: "поезда", avia: "самолёты", bus: "автобусы", etrain: "электрички" })[mode] || ""; }
 function formatSearchTime(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "сейчас" : date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
+function formatShortDate(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }); }
 function safeUrl(value) { try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : "https://www.tutu.ru/"; } catch { return "https://www.tutu.ru/"; } }
 function escapeHtml(value = "") { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
 function escapeAttribute(value = "") { return escapeHtml(value); }
