@@ -36,6 +36,16 @@ test("prefers canonical MCP fields and adds lean search defaults", () => {
   });
 });
 
+test("does not reuse departure date as an avia return date", () => {
+  const schema = { properties: {
+    origin: { type: "string" }, destination: { type: "string" },
+    departure_date: { type: "string" }, return_date: { type: ["string", "null"] }
+  } };
+  assert.deepEqual(buildToolArguments(schema, { from: "Москва", to: "Казань", date: "2026-08-20" }), {
+    origin: "Москва", destination: "Казань", departure_date: "2026-08-20"
+  });
+});
+
 test("ranks search before detail tools", () => {
   const tools = [
     { name: "train_details", description: "Get train detail" },
@@ -78,7 +88,7 @@ test("labels demo evidence honestly", () => {
 
 test("normalizes resolved city and live multitransport variants", () => {
   const payload = {
-    variants: [{ offer_id: "1", transport: "avia", price: { amount: 29239, currency: "RUB" }, duration_min: 315, segments_count: 2, departure_at: "2026-08-20T18:20:00+05:00", arrival_at: "2026-08-21T09:30:00+03:00", carriers: ["Ямал", "Utair"], search_results_url: "https://avia.tutu.ru/example", legs: [{ from: "Салехард, SLY", to: "Санкт-Петербург — Пулково (LED)", segments: [] }] }],
+    variants: [{ offer_id: "1", transport: "avia", price: { amount: 29239, currency: "RUB" }, duration_min: 315, segments_count: 2, departure_at: "2026-08-20T18:20:00+05:00", arrival_at: "2026-08-21T09:30:00+03:00", carriers: ["Ямал", "Utair"], checkout_url: "https://mtp-deeplink.tutu.ru/unreliable", search_results_url: "https://avia.tutu.ru/example", legs: [{ from: "Салехард, SLY", to: "Санкт-Петербург — Пулково (LED)", segments: [] }] }],
     meta: { from: { name: "Салехард" }, to: { name: "Санкт-Петербург" }, unavailable: [{ mode: "railway", reason: "no_route" }] }
   };
   const response = { tool: "search_multitransport", result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
@@ -89,6 +99,7 @@ test("normalizes resolved city and live multitransport variants", () => {
   assert.equal(routes[0].productType, "avia");
   assert.match(routes[0].transport, /Ямал/);
   assert.match(routes[0].accessibility.risks.join(" "), /питомца/);
+  assert.equal(routes[0].bookingUrl, "https://avia.tutu.ru/example");
   assert.equal(context.resolvedTo, "Санкт-Петербург");
   assert.equal(context.unavailable[0].mode, "railway");
 });

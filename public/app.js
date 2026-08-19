@@ -6,7 +6,6 @@ const dateInput = document.querySelector("#date");
 const walkInput = form.elements.maxWalk;
 const walkOutput = document.querySelector("#walkOutput");
 const mcpStatus = document.querySelector("#mcpStatus");
-let currentRoutes = new Map();
 
 const tomorrow = new Date(Date.now() + 86_400_000);
 dateInput.min = new Date().toISOString().slice(0, 10);
@@ -84,7 +83,6 @@ function renderResults(data, payload) {
   if (!samePlace(payload.from, from)) corrections.push(`«${escapeHtml(payload.from)}» распознано как «${escapeHtml(from)}»`);
   if (!samePlace(payload.to, to)) corrections.push(`«${escapeHtml(payload.to)}» распознано как «${escapeHtml(to)}»`);
   const unavailable = (data.context?.unavailable || []).map((item) => modeLabel(item.mode)).filter(Boolean);
-  currentRoutes = new Map(data.routes.map((route) => [route.id, route]));
   resultContent.innerHTML = `
     ${demo ? `<div class="mode-banner" role="status"><strong>Демонстрационный режим.</strong> ${escapeHtml(data.warning)}</div>` : ""}
     ${corrections.length ? `<div class="correction-banner" role="status"><span>✓</span><div><strong>Уточнили направление</strong><p>${corrections.join(" · ")}</p></div></div>` : ""}
@@ -118,8 +116,9 @@ function routeCard(route, index, total) {
         <div class="evidence-list">${(route.evidence || []).map((item) => `<div><i class="evidence-${item.state}"></i><span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.note)}</small></span></div>`).join("")}</div>
       </details>
       <div class="route-actions">
+        <span class="handoff-note">${handoffLabel(route)}</span>
         <button class="secondary-button" type="button" data-plan='${escapeAttribute(JSON.stringify(route.accessibility?.actions || []))}'>Что сделать до поездки</button>
-        <a class="book-button" href="${safeUrl(route.bookingUrl)}" target="_blank" rel="noreferrer" ${route.checkoutRef ? `data-checkout-id="${escapeAttribute(route.id)}"` : ""}>${bookingLabel(route)} <span>→</span></a>
+        <a class="book-button" href="${safeUrl(route.bookingUrl)}" target="_blank" rel="noreferrer">${bookingLabel(route)} <span>→</span></a>
       </div>
     </article>`;
 }
@@ -136,12 +135,6 @@ function renderEmpty(data, payload) {
 }
 
 resultContent.addEventListener("click", (event) => {
-  const checkoutLink = event.target.closest("[data-checkout-id]");
-  if (checkoutLink) {
-    event.preventDefault();
-    prepareCheckout(checkoutLink);
-    return;
-  }
   const button = event.target.closest("[data-plan]");
   if (!button) return;
   const actions = JSON.parse(button.dataset.plan || "[]");
@@ -149,37 +142,6 @@ resultContent.addEventListener("click", (event) => {
   if (old) return old.remove();
   button.closest(".route-card").insertAdjacentHTML("beforeend", `<div class="action-plan"><strong>До оплаты</strong><ol>${actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol><p>Мы не подменяем подтверждение перевозчика — мы помогаем ничего не забыть.</p></div>`);
 });
-
-async function prepareCheckout(link) {
-  const route = currentRoutes.get(link.dataset.checkoutId);
-  if (!route?.checkoutRef) return window.open(link.href, "_blank", "noopener");
-  const target = window.open("about:blank", "_blank");
-  if (target) target.opener = null;
-  const original = link.innerHTML;
-  link.classList.add("is-loading");
-  link.textContent = "Готовим продолжение…";
-  try {
-    const response = await fetch("/api/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkoutRef: route.checkoutRef })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-    navigateCheckout(target, data.url);
-  } catch {
-    navigateCheckout(target, route.bookingUrl);
-  } finally {
-    link.classList.remove("is-loading");
-    link.innerHTML = original;
-  }
-}
-
-function navigateCheckout(target, url) {
-  const safe = safeUrl(url);
-  if (target) target.location.href = safe;
-  else window.location.href = safe;
-}
 
 function renderError(message) {
   resultContent.innerHTML = `<div class="error-card"><span aria-hidden="true">↻</span><div><p class="eyebrow">Поиск прервался</p><h2>Маршрут не потерян</h2><p>${escapeHtml(message)}. Проверьте соединение и попробуйте ещё раз.</p><button class="primary-button" type="button" id="retryButton">Повторить поиск</button></div></div>`;
@@ -220,6 +182,11 @@ function bookingLabel(route) {
   if (route.productType === "bus") return "Выбрать рейс в Туту";
   if (["rail", "railway"].includes(route.productType)) return "Выбрать места в Туту";
   return "Продолжить в Туту";
+}
+function handoffLabel(route) {
+  if (route.productType === "avia") return "Направление, дата и пассажиры уже заполнены";
+  if (["rail", "railway"].includes(route.productType)) return "Направление, дата и поезд уже выбраны";
+  return "Направление и дата уже заполнены";
 }
 function samePlace(left, right) { return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase(); }
 function modeLabel(mode) { return ({ railway: "поезда", rail: "поезда", avia: "самолёты", bus: "автобусы", etrain: "электрички" })[mode] || ""; }

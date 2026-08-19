@@ -162,9 +162,8 @@ function normalizeTutuOffer(offer, input, tool, index) {
     price: Number(offer.price?.amount || 0),
     currency: offer.price?.currency || "RUB",
     changes: Math.max(0, Number(offer.segments_count || 1) - 1),
-    bookingUrl: offer.checkout_url || offer.search_results_url || "https://www.tutu.ru/",
+    bookingUrl: preferredBookingUrl(offer),
     searchResultsUrl: offer.search_results_url,
-    checkoutRef: offer.checkout_ref || null,
     evidence: [
       { label: "Билет и расписание", state: "confirmed", note: "Подтверждено данными Туту" },
       { label: "Станции", state: "confirmed", note: `${offer.legs?.[0]?.from || segment.from || input.from} → ${lastLeg?.to || lastSegment.to || input.to}` },
@@ -175,6 +174,22 @@ function normalizeTutuOffer(offer, input, tool, index) {
     ]
   };
   return assessRoute(route, input);
+}
+
+function preferredBookingUrl(offer) {
+  const checkoutUrl = offer.checkout_url;
+  if (isReliableTutuUrl(checkoutUrl)) return checkoutUrl;
+  if (/^https:\/\//.test(offer.search_results_url || "")) return offer.search_results_url;
+  return "https://www.tutu.ru/";
+}
+
+function isReliableTutuUrl(value) {
+  if (!/^https:\/\//.test(value || "")) return false;
+  try {
+    return new URL(value).hostname !== "mtp-deeplink.tutu.ru";
+  } catch {
+    return false;
+  }
 }
 
 function offerLabel(offer, input, trainName, voyageNumber) {
