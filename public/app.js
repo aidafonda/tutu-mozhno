@@ -23,6 +23,9 @@ form.addEventListener("submit", async (event) => {
   payload.stepFree = form.elements.stepFree.checked;
   payload.assistance = form.elements.assistance.checked;
   payload.accessibleToilet = form.elements.accessibleToilet.checked;
+  payload.withChild = form.elements.withChild.checked;
+  payload.withPet = form.elements.withPet.checked;
+  payload.heavyLuggage = form.elements.heavyLuggage.checked;
 
   setLoading(payload);
   try {
@@ -51,7 +54,7 @@ async function checkMcp() {
     const data = await response.json();
     const isLive = data.mcp?.ok;
     mcpStatus.className = `mcp-status ${isLive ? "is-live" : "is-demo"}`;
-    mcpStatus.innerHTML = `<span class="status-dot"></span><span>${isLive ? `MCP онлайн · ${data.mcp.tools.length} инструментов` : "Демо-режим"}</span>`;
+    mcpStatus.innerHTML = `<span class="status-dot"></span><span>${isLive ? "Сервис работает" : "Ограниченный режим"}</span>`;
   } catch {
     mcpStatus.className = "mcp-status is-demo";
     mcpStatus.innerHTML = '<span class="status-dot"></span><span>Статус неизвестен</span>';
@@ -72,24 +75,33 @@ function setLoading(payload) {
 }
 
 function renderResults(data, payload) {
+  if (data.mode === "empty") return renderEmpty(data, payload);
   const demo = data.mode === "demo";
+  const from = data.context?.resolvedFrom || payload.from;
+  const to = data.context?.resolvedTo || payload.to;
+  const corrections = [];
+  if (!samePlace(payload.from, from)) corrections.push(`«${escapeHtml(payload.from)}» распознано как «${escapeHtml(from)}»`);
+  if (!samePlace(payload.to, to)) corrections.push(`«${escapeHtml(payload.to)}» распознано как «${escapeHtml(to)}»`);
+  const unavailable = (data.context?.unavailable || []).map((item) => modeLabel(item.mode)).filter(Boolean);
   resultContent.innerHTML = `
     ${demo ? `<div class="mode-banner" role="status"><strong>Демонстрационный режим.</strong> ${escapeHtml(data.warning)}</div>` : ""}
+    ${corrections.length ? `<div class="correction-banner" role="status"><span>✓</span><div><strong>Уточнили направление</strong><p>${corrections.join(" · ")}</p></div></div>` : ""}
+    ${unavailable.length ? `<div class="mode-banner"><strong>Учли ограничения маршрута.</strong> Не нашли варианты: ${escapeHtml(unavailable.join(", "))}. Показываем доступные виды транспорта.</div>` : ""}
     <div class="results-header">
-      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Актуальные предложения"}</p><h2>${escapeHtml(payload.from)} → ${escapeHtml(payload.to)}</h2><p>Показываем не «процент доступности», а главное неизвестное и следующее действие.</p></div>
-      <div class="source-badge"><span></span>${escapeHtml(data.source)}</div>
+      <div><p class="eyebrow">${demo ? "Пример интерфейса" : "Подходящие варианты"}</p><h2>${escapeHtml(from)} → ${escapeHtml(to)}</h2><p>Сначала — самое важное ограничение и действие до оплаты.</p></div>
+      <div class="source-badge"><span></span>Обновлено ${formatSearchTime(data.searchedAt)}</div>
     </div>
-    <div class="route-list">${data.routes.map((route, index) => routeCard(route, index)).join("")}</div>`;
+    <div class="route-list">${data.routes.map((route, index) => routeCard(route, index, data.routes.length)).join("")}</div>`;
 }
 
-function routeCard(route, index) {
+function routeCard(route, index, total) {
   const departure = formatDateTime(route.departure);
   const arrival = formatDateTime(route.arrival);
   const status = route.accessibility?.status || "verify";
   return `
     <article class="route-card ${index === 0 ? "recommended" : ""}">
       <div class="route-top">
-        <div><span class="transport">${escapeHtml(route.transport || "Маршрут")}</span>${index === 0 ? '<span class="best">Самый спокойный</span>' : ""}</div>
+        <div><span class="transport">${escapeHtml(route.transport || "Маршрут")}</span>${index === 0 && total > 1 ? '<span class="best">Меньше сложностей</span>' : ""}</div>
         <span class="access-status ${status}"><i></i>${escapeHtml(route.accessibility?.label || "Нужно уточнить")}</span>
       </div>
       <div class="route-main">
@@ -105,9 +117,20 @@ function routeCard(route, index) {
       </details>
       <div class="route-actions">
         <button class="secondary-button" type="button" data-plan='${escapeAttribute(JSON.stringify(route.accessibility?.actions || []))}'>Что сделать до поездки</button>
-        <a class="book-button" href="${safeUrl(route.bookingUrl)}" target="_blank" rel="noreferrer">Перейти в Туту <span>→</span></a>
+        <a class="book-button" href="${safeUrl(route.bookingUrl)}" target="_blank" rel="noreferrer">${bookingLabel(route)} <span>→</span></a>
       </div>
     </article>`;
+}
+
+function renderEmpty(data, payload) {
+  const from = data.context?.resolvedFrom || payload.from;
+  const to = data.context?.resolvedTo || payload.to;
+  const corrected = !samePlace(payload.to, to) ? `<div class="correction-banner"><span>✓</span><div><strong>Название уточнено</strong><p>«${escapeHtml(payload.to)}» распознано как «${escapeHtml(to)}»</p></div></div>` : "";
+  resultContent.innerHTML = `${corrected}<div class="empty-card"><span aria-hidden="true">↗</span><div><p class="eyebrow">${escapeHtml(from)} → ${escapeHtml(to)}</p><h2>Этим транспортом добраться не получилось</h2><p>${escapeHtml(data.message || "Попробуйте изменить дату или вид транспорта.")}</p>${data.suggestedMode === "any" ? '<button class="primary-button" type="button" id="searchAllButton">Показать другие виды транспорта <span>→</span></button>' : ""}</div></div>`;
+  document.querySelector("#searchAllButton")?.addEventListener("click", () => {
+    form.elements.mode.value = "any";
+    form.requestSubmit();
+  });
 }
 
 resultContent.addEventListener("click", (event) => {
@@ -153,6 +176,15 @@ function durationLabel(minutes) {
 }
 
 function number(value) { return new Intl.NumberFormat("ru-RU").format(value); }
+function bookingLabel(route) {
+  if (route.productType === "avia") return "Посмотреть рейсы в Туту";
+  if (route.productType === "bus") return "Выбрать рейс в Туту";
+  if (["rail", "railway"].includes(route.productType)) return "Выбрать места в Туту";
+  return "Продолжить в Туту";
+}
+function samePlace(left, right) { return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase(); }
+function modeLabel(mode) { return ({ railway: "поезда", rail: "поезда", avia: "самолёты", bus: "автобусы", etrain: "электрички" })[mode] || ""; }
+function formatSearchTime(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "сейчас" : date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
 function safeUrl(value) { try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : "https://www.tutu.ru/"; } catch { return "https://www.tutu.ru/"; } }
 function escapeHtml(value = "") { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
 function escapeAttribute(value = "") { return escapeHtml(value); }

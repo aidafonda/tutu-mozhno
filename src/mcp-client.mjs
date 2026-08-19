@@ -100,10 +100,9 @@ export class TutuMcpClient {
     const tools = await this.listTools();
     const exactName = { train: "search_rail", plane: "search_avia", bus: "search_bus", any: "search_multitransport" }[input.mode];
     const exactTool = tools.find((tool) => tool.name === exactName);
-    const candidates = [
-      ...(exactTool ? [exactTool] : []),
-      ...rankSearchTools(tools, input.mode).filter((tool) => tool.name !== exactName)
-    ].slice(0, 4);
+    // A rail request must never silently turn into an etrain/bus/avia request.
+    // Cross-mode fallback is a user decision and lives in the UI.
+    const candidates = exactTool ? [exactTool] : rankSearchTools(tools, input.mode).slice(0, 4);
     if (!candidates.length) {
       throw new McpError("В MCP не найден подходящий инструмент поиска", {
         availableTools: tools.map((tool) => tool.name)
@@ -117,6 +116,7 @@ export class TutuMcpClient {
         const result = await this.callTool(tool.name, args);
         return { tool: tool.name, args, result, toolsCount: tools.length };
       } catch (error) {
+        if (exactTool) throw error;
         attempts.push({ tool: tool.name, message: error.message });
       }
     }
@@ -189,9 +189,11 @@ export function buildToolArguments(schema, input) {
   }
 
   if (properties.page) result.page = 1;
-  if (properties.page_size) result.page_size = 3;
+  if (properties.page_size) result.page_size = 5;
   if (properties.sort) result.sort = "duration_asc";
   if (properties.view) result.view = "compact";
+  if (properties.optimize_for) result.optimize_for = "time";
+  if (properties.modes && input.mode === "any") result.modes = ["avia", "railway", "bus"];
   return result;
 }
 

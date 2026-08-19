@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TutuMcpClient } from "./src/mcp-client.mjs";
-import { createDemoRoutes, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
+import { createDemoRoutes, extractMcpContext, normalizeMcpResult, validateSearchInput } from "./src/product.mjs";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(ROOT, "public");
@@ -27,17 +27,37 @@ const server = createServer(async (request, response) => {
       try {
         const mcpResult = await mcp.search(validation.value);
         const routes = normalizeMcpResult(mcpResult, validation.value);
+        const context = extractMcpContext(mcpResult, validation.value);
         if (routes.length) {
           return json(response, 200, {
             mode: "live",
-            source: "Tutu MCP",
+            source: "Данные Туту",
             tool: mcpResult.tool,
             searchedAt: new Date().toISOString(),
+            context,
             routes
           });
         }
-        throw new Error("MCP ответил, но предложения не удалось нормализовать");
+        return json(response, 200, {
+          mode: "empty",
+          source: "Данные Туту",
+          searchedAt: new Date().toISOString(),
+          context,
+          reason: "no_offers",
+          message: "На выбранную дату подходящих вариантов не найдено"
+        });
       } catch (error) {
+        if (/railway_id|requires railway|geo lookup/i.test(error.message)) {
+          return json(response, 200, {
+            mode: "empty",
+            source: "Данные Туту",
+            searchedAt: new Date().toISOString(),
+            context: { resolvedFrom: validation.value.from, resolvedTo: normalizeKnownCity(validation.value.to), unavailable: [{ mode: "railway", reason: "no_route" }] },
+            reason: "transport_unavailable",
+            message: "Для выбранного города не найден железнодорожный маршрут. Попробуйте поиск по всем видам транспорта.",
+            suggestedMode: "any"
+          });
+        }
         if (FALLBACK_MODE !== "demo") throw error;
         return json(response, 200, {
           mode: "demo",
@@ -75,6 +95,12 @@ async function inspectMcp() {
     lastMcpCheck = { ok: false, checkedAt: new Date().toISOString(), tools: [], error: error.message };
   }
   return lastMcpCheck;
+}
+
+function normalizeKnownCity(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["питер", "спб", "санкт петербург"].includes(normalized)) return "Санкт-Петербург";
+  return value;
 }
 
 async function health() {

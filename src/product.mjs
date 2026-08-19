@@ -8,6 +8,9 @@ export function validateSearchInput(input = {}) {
     stepFree: Boolean(input.stepFree),
     assistance: Boolean(input.assistance),
     accessibleToilet: Boolean(input.accessibleToilet),
+    withChild: Boolean(input.withChild),
+    withPet: Boolean(input.withPet),
+    heavyLuggage: Boolean(input.heavyLuggage),
     passengers: Math.max(1, Math.min(5, Number(input.passengers || 1)))
   };
   const errors = {};
@@ -23,6 +26,7 @@ export function createDemoRoutes(input) {
   const route = (offset, durationHours, price, changes, variant) => ({
     id: `demo-${variant}`,
     source: "demo",
+    productType: input.mode === "plane" ? "avia" : input.mode === "bus" ? "bus" : "railway",
     transport: input.mode === "plane" ? "Самолёт" : input.mode === "bus" ? "Автобус" : "Поезд",
     from: input.from,
     to: input.to,
@@ -33,7 +37,7 @@ export function createDemoRoutes(input) {
     changes,
     bookingUrl: "https://www.tutu.ru/",
     evidence: [
-      { label: "Расписание и цена", state: "demo", note: "Демонстрационные данные — не результат MCP" },
+      { label: "Расписание и цена", state: "demo", note: "Демонстрационные данные — не актуальное предложение Туту" },
       { label: "Безбарьерный вход", state: "unknown", note: "Нужно подтверждение перевозчика" },
       { label: "Помощь при посадке", state: input.assistance ? "action" : "unknown", note: input.assistance ? "Запросить заранее" : "Не запрашивалась" }
     ]
@@ -52,7 +56,13 @@ export function assessRoute(route, input) {
   if (route.changes > 0) risks.push("Пересадка — нужно проверить расстояние и наличие лифта");
   if (input.stepFree) risks.push("Нет подтверждения маршрута без ступеней");
   if (input.accessibleToilet) risks.push("Наличие доступного санузла требует подтверждения");
+  if (input.withChild && route.changes > 0) risks.push("Пересадку нужно проверить с учётом ребёнка и коляски");
+  if (input.withPet) risks.push("Правила перевозки питомца требуют подтверждения для выбранного тарифа");
+  if (input.heavyLuggage && route.changes > 0) risks.push("Пересадка с тяжёлым багажом может быть неудобной");
   if (input.assistance) actions.push("Запросить сопровождение у перевозчика заранее");
+  if (input.withChild) actions.push("Проверить детский тариф и возможность провоза коляски");
+  if (input.withPet) actions.push("Проверить требования к переноске и документам на питомца");
+  if (input.heavyLuggage) actions.push("Проверить норму багажа выбранного тарифа");
   actions.push("Подтвердить доступность до оплаты");
 
   return {
@@ -78,7 +88,10 @@ export function normalizeMcpResult(mcpResponse, input) {
       // Text remains useful as traceable evidence even when a tool does not return JSON.
     }
   }
-  const exactOffers = objects.flatMap((object) => Array.isArray(object?.offers) ? object.offers : []);
+  const exactOffers = objects.flatMap((object) => [
+    ...(Array.isArray(object?.offers) ? object.offers : []),
+    ...(Array.isArray(object?.variants) ? object.variants : [])
+  ]);
   if (exactOffers.length) {
     return exactOffers.slice(0, 6).map((offer, index) => normalizeTutuOffer(offer, input, mcpResponse.tool, index));
   }
@@ -86,6 +99,7 @@ export function normalizeMcpResult(mcpResponse, input) {
   return candidates.map((offer, index) => assessRoute({
     id: `mcp-${index}`,
     source: "mcp",
+    productType: input.mode === "plane" ? "avia" : input.mode === "bus" ? "bus" : input.mode === "train" ? "railway" : "unknown",
     transport: labelForMode(input.mode),
     from: input.from,
     to: input.to,
@@ -96,11 +110,34 @@ export function normalizeMcpResult(mcpResponse, input) {
     changes: Number(firstValue(offer, ["changes", "transfers", "stops"]) || 0),
     bookingUrl: findUrl(offer) || "https://www.tutu.ru/",
     evidence: [
-      { label: "Предложение транспорта", state: "confirmed", note: `Получено через Туту MCP: ${mcpResponse.tool}` },
-      { label: "Безбарьерный вход", state: "unknown", note: "В ответе MCP не подтверждено" },
+      { label: "Предложение транспорта", state: "confirmed", note: "Подтверждено данными Туту" },
+      { label: "Безбарьерный вход", state: "unknown", note: "В данных Туту не подтверждено" },
       { label: "Помощь при посадке", state: input.assistance ? "action" : "unknown", note: input.assistance ? "Нужно запросить" : "Не запрашивалась" }
     ]
   }, input));
+}
+
+export function extractMcpContext(mcpResponse, input) {
+  const content = mcpResponse?.result?.content || [];
+  for (const item of content) {
+    if (item.type !== "text" || typeof item.text !== "string") continue;
+    try {
+      const payload = JSON.parse(item.text);
+      const meta = payload.meta || {};
+      return {
+        resolvedFrom: meta.from?.name || input.from,
+        resolvedTo: meta.to?.name || input.to,
+        fromRegion: meta.from?.region || null,
+        toRegion: meta.to?.region || null,
+        unavailable: meta.unavailable || [],
+        totalMatched: meta.total_matched ?? payload.offers?.length ?? payload.variants?.length ?? 0,
+        hasMore: Boolean(meta.has_more)
+      };
+    } catch {
+      // Ignore non-JSON tool text.
+    }
+  }
+  return { resolvedFrom: input.from, resolvedTo: input.to, unavailable: [], totalMatched: 0, hasMore: false };
 }
 
 function normalizeTutuOffer(offer, input, tool, index) {
@@ -115,7 +152,8 @@ function normalizeTutuOffer(offer, input, tool, index) {
   const route = {
     id: offer.offer_id || `mcp-${index}`,
     source: "mcp",
-    transport: trainName ? `${trainName}${voyageNumber ? ` · ${voyageNumber}` : ""}` : voyageNumber ? `Поезд ${voyageNumber}` : labelForMode(input.mode),
+    productType: offer.transport || (input.mode === "train" ? "railway" : input.mode),
+    transport: offerLabel(offer, input, trainName, voyageNumber),
     from: offer.legs?.[0]?.from || segment.from || input.from,
     to: lastLeg?.to || lastSegment.to || input.to,
     departure: offer.departure_at || segment.departure_at,
@@ -127,15 +165,24 @@ function normalizeTutuOffer(offer, input, tool, index) {
     bookingUrl: offer.checkout_url || offer.search_results_url || "https://www.tutu.ru/",
     searchResultsUrl: offer.search_results_url,
     evidence: [
-      { label: "Билет и расписание", state: "confirmed", note: `Туту MCP · ${tool}` },
+      { label: "Билет и расписание", state: "confirmed", note: "Подтверждено данными Туту" },
       { label: "Станции", state: "confirmed", note: `${offer.legs?.[0]?.from || segment.from || input.from} → ${lastLeg?.to || lastSegment.to || input.to}` },
-      { label: "Безбарьерный путь", state: "unknown", note: "MCP не вернул подтверждение инфраструктуры" },
+      { label: "Безбарьерный путь", state: "unknown", note: "В данных Туту нет подтверждения инфраструктуры" },
       ...(categories.length ? [{ label: "Вагоны в продаже", state: "confirmed", note: categories.join(", ") }] : []),
       ...(review ? [{ label: "Отзывы о поезде", state: "confirmed", note: review }] : []),
       { label: "Помощь при посадке", state: input.assistance ? "action" : "unknown", note: input.assistance ? "Запросить у перевозчика заранее" : "Не запрашивалась" }
     ]
   };
   return assessRoute(route, input);
+}
+
+function offerLabel(offer, input, trainName, voyageNumber) {
+  if (trainName) return `${trainName}${voyageNumber ? ` · ${voyageNumber}` : ""}`;
+  if (offer.transport === "avia") return `Самолёт${offer.carriers?.length ? ` · ${offer.carriers.join(" + ")}` : ""}`;
+  if (offer.transport === "bus") return `Автобус${offer.carriers?.length ? ` · ${offer.carriers.join(" + ")}` : ""}`;
+  if (offer.transport === "etrain") return "Электричка";
+  if (voyageNumber) return `Поезд ${voyageNumber}`;
+  return labelForMode(input.mode);
 }
 
 function flattenObjects(value, result = []) {

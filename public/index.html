@@ -19,7 +19,7 @@
       <a href="/docs">Документация</a>
     </nav>
     <div class="mcp-status" id="mcpStatus" role="status">
-      <span class="status-dot"></span><span>Проверяем MCP</span>
+      <span class="status-dot"></span><span>Проверяем сервис</span>
     </div>
   </header>
 
@@ -56,10 +56,10 @@
           </label>
           <label>Транспорт
             <select id="mode" name="mode">
+              <option value="any">Любой подходящий</option>
               <option value="train">Поезд</option>
               <option value="plane">Самолёт</option>
               <option value="bus">Автобус</option>
-              <option value="any">Любой</option>
             </select>
           </label>
         </div>
@@ -71,6 +71,9 @@
             <label class="choice"><input type="checkbox" name="stepFree" checked><span class="choice-icon">↗</span><span><strong>Без ступеней</strong><small>Лифт, пандус или ровный вход</small></span></label>
             <label class="choice"><input type="checkbox" name="assistance" checked><span class="choice-icon">◆</span><span><strong>Нужно сопровождение</strong><small>Помощь на вокзале или в аэропорту</small></span></label>
             <label class="choice"><input type="checkbox" name="accessibleToilet"><span class="choice-icon">●</span><span><strong>Доступный санузел</strong><small>На маршруте или в транспорте</small></span></label>
+            <label class="choice"><input type="checkbox" name="withChild"><span class="choice-icon">♙</span><span><strong>С ребёнком и коляской</strong><small>Больше времени и минимум барьеров</small></span></label>
+            <label class="choice"><input type="checkbox" name="withPet"><span class="choice-icon">◇</span><span><strong>С питомцем</strong><small>Переноска, документы и правила тарифа</small></span></label>
+            <label class="choice"><input type="checkbox" name="heavyLuggage"><span class="choice-icon">▣</span><span><strong>Тяжёлый багаж</strong><small>Меньше пересадок и переносов</small></span></label>
             <label class="choice walk-choice"><span class="choice-icon">↔</span><span><strong>Не больше <output id="walkOutput">300 м</output> пешком</strong><input type="range" name="maxWalk" min="100" max="1000" step="100" value="300" aria-label="Максимальная дистанция пешком"></span></label>
           </div>
         </fieldset>
@@ -89,14 +92,14 @@
     <section class="how" id="how">
       <div class="section-heading"><div><span class="step">03</span><h2>Не рейтинг, а объяснение</h2></div><p>Маршрут подходит ровно настолько, насколько подходит его самый сложный участок.</p></div>
       <div class="how-grid">
-        <article><span>1</span><h3>Ищем варианты</h3><p>Реальные предложения транспорта получаем через Туту MCP.</p></article>
+        <article><span>1</span><h3>Ищем варианты</h3><p>Получаем актуальные предложения транспорта из Туту.</p></article>
         <article><span>2</span><h3>Проверяем требования</h3><p>Отделяем подтверждённые факты от правил и неизвестных данных.</p></article>
         <article><span>3</span><h3>Показываем действие</h3><p>Объясняем, что уточнить до оплаты и когда запросить помощь.</p></article>
       </div>
     </section>
   </main>
 
-  <footer><span>Прототип для ИИ-хакатона Туту × MCP 2026</span><a href="/docs">Как пользоваться и как устроено</a></footer>
+  <footer><span>Туту.Можно · прототип сервиса путешествий</span><a href="/docs">Как пользоваться</a></footer>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
